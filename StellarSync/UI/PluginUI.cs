@@ -23,6 +23,7 @@ namespace StellarSync.UI
         private string penumbraMetaData = "";
         private bool showModData = false;
         private string applyTestResult = "";
+        private string sendToServerResult = "";
         
         // Services
         private NetworkService? networkService;
@@ -212,6 +213,39 @@ namespace StellarSync.UI
             }
         }
 
+        private async void SendCharacterDataToServer()
+        {
+            if (networkService == null || modIntegrationService == null) return;
+            
+            try
+            {
+                UpdateTestInfo("Sending character data to server...");
+                
+                // Create character data object
+                var characterData = new
+                {
+                    glamourer_data = glamourerData,
+                    penumbra_meta = penumbraMetaData,
+                    penumbra_files = penumbraData,
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                };
+
+                await networkService.SendCharacterDataAsync(characterData);
+                sendToServerResult = "Character data sent successfully!";
+                UpdateTestInfo("Character data sent successfully!");
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Error sending data: {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $" (Inner: {ex.InnerException.Message})";
+                }
+                sendToServerResult = errorMessage;
+                UpdateTestInfo(errorMessage);
+            }
+        }
+
         public override void Draw()
         {
             try
@@ -301,8 +335,8 @@ namespace StellarSync.UI
                         ImGui.SameLine();
                         ImGui.TextColored(glamourerColor, modIntegrationService.GlamourerAvailable ? "Available" : "Not Available");
                         
-                        // Test button for character data
-                        if (ImGui.Button("Test Character Data", new Vector2(200, 30)))
+                        // Save character data button
+                        if (ImGui.Button("Save Character Data", new Vector2(200, 30)))
                         {
                             TestCharacterData();
                         }
@@ -313,12 +347,29 @@ namespace StellarSync.UI
                             ApplyStoredData();
                         }
                         
+                        // Send to server button (only show when connected and have data)
+                        if (networkService != null && networkService.IsConnected && showModData)
+                        {
+                            if (ImGui.Button("Send to Server", new Vector2(200, 30)))
+                            {
+                                SendCharacterDataToServer();
+                            }
+                        }
+                        
                         // Show apply result
                         if (!string.IsNullOrEmpty(applyTestResult))
                         {
                             ImGui.Text("Apply Result:");
                             ImGui.SameLine();
                             ImGui.TextColored(new Vector4(0.0f, 1.0f, 0.0f, 1.0f), applyTestResult);
+                        }
+                        
+                        // Show send to server result
+                        if (!string.IsNullOrEmpty(sendToServerResult))
+                        {
+                            ImGui.Text("Send Result:");
+                            ImGui.SameLine();
+                            ImGui.TextColored(new Vector4(0.0f, 1.0f, 0.0f, 1.0f), sendToServerResult);
                         }
                         
                         // Show collected data if available

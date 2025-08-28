@@ -74,8 +74,53 @@ namespace StellarSync.Services
         {
             if (webSocket?.State == WebSocketState.Open)
             {
-                var buffer = Encoding.UTF8.GetBytes(message);
-                await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancellationTokenSource?.Token ?? CancellationToken.None);
+                try
+                {
+                    var buffer = Encoding.UTF8.GetBytes(message);
+                    await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancellationTokenSource?.Token ?? CancellationToken.None);
+                }
+                catch (Exception ex)
+                {
+                    ErrorOccurred?.Invoke(this, $"Failed to send message: {ex.Message}");
+                    throw;
+                }
+            }
+            else
+            {
+                var error = $"WebSocket is not open. State: {webSocket?.State}";
+                ErrorOccurred?.Invoke(this, error);
+                throw new InvalidOperationException(error);
+            }
+        }
+
+        public async Task SendCharacterDataAsync(object characterData)
+        {
+            if (!isConnected)
+            {
+                throw new InvalidOperationException("Not connected to server");
+            }
+
+            try
+            {
+                var message = new
+                {
+                    type = "character_data",
+                    client = "stellar_sync",
+                    data = characterData
+                };
+
+                var jsonMessage = JsonConvert.SerializeObject(message);
+                
+                // Log message size for debugging
+                var messageSize = Encoding.UTF8.GetByteCount(jsonMessage);
+                System.Diagnostics.Debug.WriteLine($"Sending character data message, size: {messageSize} bytes");
+                
+                await SendMessageAsync(jsonMessage);
+            }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(this, $"Failed to send character data: {ex.Message}");
+                throw;
             }
         }
 
