@@ -1,0 +1,11 @@
+{
+  "Author": "Kasu",
+  "Name": "Stellar Sync",
+  "Punchline": "Synchronize your character appearance with other players",
+  "Description": "A character synchronization plugin for FFXIV that synchronizes character mods and appearance with other players.",
+  "InternalName": "StellarSync",
+  "ApplicableVersion": "any",
+  "Tags": ["sync", "character", "appearance", "multiplayer"],
+  "IconUrl": "https://raw.githubusercontent.com/your-username/Stellar-Sync/main/icon.png",
+  "RepoUrl": "https://github.com/your-username/Stellar-Sync"
+}
