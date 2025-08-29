@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Logging;
+using Dalamud.Plugin.Services;
+using Newtonsoft.Json;
 using StellarSync.Configuration;
 using StellarSync.Services;
 
@@ -23,12 +27,17 @@ namespace StellarSync.UI
         private string penumbraMetaData = "";
         private bool showModData = false;
         private string applyTestResult = "";
-        private string sendToServerResult = "";
+private string sendToServerResult = "";
+private List<dynamic> onlineUsers = new List<dynamic>();
+private string selectedUserId = "";
+private string pairResult = "";
         
         // Services
-        private NetworkService? networkService;
-        private SettingsUI? settingsUI;
-        private ModIntegrationService? modIntegrationService;
+private NetworkService? networkService;
+private SettingsUI? settingsUI;
+private ModIntegrationService? modIntegrationService;
+private IPluginLog? pluginLog;
+private IClientState? clientState;
 
         public PluginUI() : base("Stellar Sync###StellarSyncMainUI")
         {
@@ -44,9 +53,39 @@ namespace StellarSync.UI
         }
 
         public void SetNetworkService(NetworkService networkService)
-        {
-            this.networkService = networkService;
-        }
+{
+	this.networkService = networkService;
+	
+	// Wire up message handling
+	if (this.networkService != null)
+	{
+		this.networkService.MessageReceived += OnNetworkMessageReceived;
+		this.networkService.Connected += OnNetworkConnected;
+		this.networkService.Disconnected += OnNetworkDisconnected;
+		this.networkService.ErrorOccurred += OnNetworkError;
+	}
+}
+
+private void OnNetworkMessageReceived(object? sender, string message)
+{
+	HandleServerMessage(message);
+}
+
+private void OnNetworkConnected(object? sender, EventArgs e)
+{
+	UpdateConnectionStatus(true, "Connected");
+}
+
+private void OnNetworkDisconnected(object? sender, EventArgs e)
+{
+	UpdateConnectionStatus(false, "Disconnected");
+}
+
+private void OnNetworkError(object? sender, string error)
+{
+	pluginLog?.Error($"Network error: {error}");
+	UpdateConnectionStatus(false, $"Error: {error}");
+}
 
         public void SetSettingsUI(SettingsUI settingsUI)
         {
@@ -54,9 +93,19 @@ namespace StellarSync.UI
         }
 
         public void SetModIntegrationService(ModIntegrationService modIntegrationService)
-        {
-            this.modIntegrationService = modIntegrationService;
-        }
+{
+	this.modIntegrationService = modIntegrationService;
+}
+
+public void SetPluginLog(IPluginLog pluginLog)
+{
+	this.pluginLog = pluginLog;
+}
+
+public void SetClientState(IClientState clientState)
+{
+	this.clientState = clientState;
+}
 
         public void UpdateConnectionStatus(bool connected, string message = "")
         {
@@ -110,9 +159,18 @@ namespace StellarSync.UI
                     });
                 }
                 else
-                {
-                    await networkService.ConnectAsync(serverUrl);
-                }
+{
+	// Get the player's character name
+	var characterName = GetPlayerCharacterName();
+	await networkService.ConnectAsync(serverUrl, characterName);
+	
+	// Request users list after connection
+	_ = Task.Run(async () =>
+	{
+		await Task.Delay(1000); // Wait a bit for connection to stabilize
+		await networkService.RequestUsersAsync();
+	});
+}
             }
             catch (Exception ex)
             {
@@ -214,37 +272,188 @@ namespace StellarSync.UI
         }
 
         private async void SendCharacterDataToServer()
-        {
-            if (networkService == null || modIntegrationService == null) return;
-            
-            try
-            {
-                UpdateTestInfo("Sending character data to server...");
-                
-                // Create character data object
-                var characterData = new
-                {
-                    glamourer_data = glamourerData,
-                    penumbra_meta = penumbraMetaData,
-                    penumbra_files = penumbraData,
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-                };
+{
+	if (networkService == null || modIntegrationService == null) return;
+	
+	try
+	{
+		UpdateTestInfo("Sending character data to server...");
+		
+		// Create character data object
+		var characterData = new
+		{
+			glamourer_data = glamourerData,
+			penumbra_meta = penumbraMetaData,
+			penumbra_files = penumbraData,
+			timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+		};
 
-                await networkService.SendCharacterDataAsync(characterData);
-                sendToServerResult = "Character data sent successfully!";
-                UpdateTestInfo("Character data sent successfully!");
-            }
-            catch (Exception ex)
-            {
-                var errorMessage = $"Error sending data: {ex.Message}";
-                if (ex.InnerException != null)
-                {
-                    errorMessage += $" (Inner: {ex.InnerException.Message})";
-                }
-                sendToServerResult = errorMessage;
-                UpdateTestInfo(errorMessage);
-            }
-        }
+		await networkService.SendCharacterDataAsync(characterData);
+		sendToServerResult = "Character data sent successfully!";
+		UpdateTestInfo("Character data sent successfully!");
+	}
+	catch (Exception ex)
+	{
+		var errorMessage = $"Error sending data: {ex.Message}";
+		if (ex.InnerException != null)
+		{
+			errorMessage += $" (Inner: {ex.InnerException.Message})";
+		}
+		sendToServerResult = errorMessage;
+		UpdateTestInfo(errorMessage);
+	}
+}
+
+private async void RequestUserData(string userId)
+{
+	if (networkService == null || !networkService.IsConnected) return;
+	
+	try
+	{
+		await networkService.RequestUserDataAsync(userId);
+		pairResult = $"Requesting data from user {userId}...";
+	}
+	catch (Exception ex)
+{
+	pairResult = $"Error: {ex.Message}";
+	pluginLog?.Error($"Failed to request user data: {ex.Message}");
+}
+}
+
+private void HandleServerMessage(string message)
+{
+	try
+	{
+		var messageObj = JsonConvert.DeserializeObject<dynamic>(message);
+		var messageType = messageObj?.type?.ToString();
+		
+		switch (messageType)
+		{
+			case "users_list":
+				HandleUsersList(messageObj?.data);
+				break;
+			case "user_character_data":
+				HandleUserCharacterData(messageObj?.data);
+				break;
+			case "character_data_received":
+				sendToServerResult = "Character data received by server!";
+				break;
+			case "connected":
+	pluginLog?.Information("Connected to server successfully");
+	break;
+		}
+	}
+	catch (Exception ex)
+{
+	pluginLog?.Error($"Failed to handle server message: {ex.Message}");
+}
+}
+
+private void HandleUsersList(dynamic usersData)
+{
+	try
+	{
+		onlineUsers.Clear();
+		if (usersData != null)
+		{
+			foreach (var user in usersData)
+			{
+				onlineUsers.Add(user);
+			}
+		}
+	}
+	catch (Exception ex)
+{
+	pluginLog?.Error($"Failed to handle users list: {ex.Message}");
+}
+}
+
+private void HandleUserCharacterData(dynamic data)
+{
+	try
+	{
+		if (data != null && modIntegrationService != null)
+		{
+			// Store the received character data
+			var characterData = data.data;
+			
+			// Apply the received data to the local character
+			if (characterData?.glamourer_data != null)
+			{
+				_ = Task.Run(async () => await modIntegrationService.ApplyGlamourerData(characterData.glamourer_data.ToString()));
+			}
+			
+			if (characterData?.penumbra_meta != null)
+			{
+				_ = Task.Run(async () => await modIntegrationService.ApplyPenumbraMetaData(characterData.penumbra_meta.ToString()));
+			}
+			
+			// Apply Penumbra files if available
+			if (characterData?.penumbra_files != null)
+			{
+				_ = Task.Run(async () => 
+				{
+					try
+					{
+						// Convert dynamic penumbra_files to Dictionary<string, byte[]>
+						var penumbraFiles = new Dictionary<string, byte[]>();
+						foreach (var kvp in characterData.penumbra_files)
+						{
+							if (kvp.Value is byte[] fileBytes)
+							{
+								penumbraFiles[kvp.Name] = fileBytes;
+							}
+						}
+						
+						if (penumbraFiles.Count > 0)
+						{
+							var result = await modIntegrationService.ApplyPenumbraFilesFromTransfer(penumbraFiles);
+							pluginLog?.Information($"Penumbra file transfer result: {result}");
+						}
+					}
+					catch (Exception ex)
+					{
+						pluginLog?.Error($"Failed to apply Penumbra files: {ex.Message}");
+					}
+				});
+			}
+			
+			pairResult = "Character data applied successfully!";
+		}
+	}
+	catch (Exception ex)
+	{
+		pairResult = $"Error applying character data: {ex.Message}";
+		pluginLog?.Error($"Failed to handle user character data: {ex.Message}");
+	}
+}
+
+private string GetPlayerCharacterName()
+{
+	try
+	{
+		if (clientState?.LocalPlayer != null)
+{
+	var player = clientState.LocalPlayer;
+	return player.Name.ToString() ?? "Unknown";
+}
+		else if (clientState?.LocalContentId != 0)
+		{
+			// Fallback if player object isn't available but we have a content ID
+			return $"Player_{clientState.LocalContentId:X}";
+		}
+		else
+		{
+			// Final fallback
+			return $"Player_{DateTime.Now:HHmmss}";
+		}
+	}
+	catch (Exception ex)
+	{
+		pluginLog?.Warning($"Failed to get character name: {ex.Message}");
+		return $"Player_{DateTime.Now:HHmmss}";
+	}
+}
 
         public override void Draw()
         {
@@ -305,13 +514,41 @@ namespace StellarSync.UI
                     
                     ImGui.Separator();
                     
-                    // Pairs section
-                    ImGui.Text("Connected Pairs:");
-                    ImGui.Separator();
-                    
-                    // TODO: Show actual pairs here
-                    ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No pairs connected yet");
-                    ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Other players will appear here when they connect");
+                    // Online Users section
+ImGui.Text("Online Users:");
+ImGui.Separator();
+
+if (onlineUsers.Count > 0)
+{
+	foreach (var user in onlineUsers)
+	{
+		var userName = user?.name?.ToString() ?? "Unknown";
+		var userId = user?.id?.ToString() ?? "";
+		
+		ImGui.Text(userName);
+		ImGui.SameLine();
+		
+		// Pair button
+var buttonLabel = $"Pair##{userId}";
+if (ImGui.Button(buttonLabel, new Vector2(60, 20)))
+{
+	RequestUserData(userId);
+}
+	}
+}
+else
+{
+	ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No other users online");
+	ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Other players will appear here when they connect");
+}
+
+// Show pair result
+if (!string.IsNullOrEmpty(pairResult))
+{
+	ImGui.Text("Pair Result:");
+	ImGui.SameLine();
+	ImGui.TextColored(new Vector4(0.0f, 1.0f, 0.0f, 1.0f), (ImU8String)pairResult);
+}
                     
                     ImGui.Separator();
                     

@@ -20,43 +20,47 @@ namespace StellarSync.Services
 
         public bool IsConnected => isConnected;
 
-        public async Task ConnectAsync(string serverUrl)
-        {
-            try
-            {
-                webSocket = new ClientWebSocket();
-                cancellationTokenSource = new CancellationTokenSource();
+        public async Task ConnectAsync(string serverUrl, string userName = "Unknown")
+{
+	try
+	{
+		webSocket = new ClientWebSocket();
+		cancellationTokenSource = new CancellationTokenSource();
 
-                // Convert HTTP URL to WebSocket URL
-                string wsUrl = serverUrl.Replace("http://", "ws://").Replace("https://", "wss://");
-                if (!wsUrl.EndsWith("/ws"))
-                {
-                    wsUrl += "/ws";
-                }
+		// Convert HTTP URL to WebSocket URL
+		string wsUrl = serverUrl.Replace("http://", "ws://").Replace("https://", "wss://");
+		if (!wsUrl.EndsWith("/ws"))
+		{
+			wsUrl += "/ws";
+		}
 
-                await webSocket.ConnectAsync(new Uri(wsUrl), cancellationTokenSource.Token);
-                
-                isConnected = true;
-                Connected?.Invoke(this, EventArgs.Empty);
+		await webSocket.ConnectAsync(new Uri(wsUrl), cancellationTokenSource.Token);
+		
+		isConnected = true;
+		Connected?.Invoke(this, EventArgs.Empty);
 
-                // Send simple connection message (no auth for Phase 1)
-                var connectMessage = new
-                {
-                    type = "connect",
-                    client = "stellar_sync"
-                };
+		// Send connection message with user info
+		var connectMessage = new
+		{
+			type = "connect",
+			data = new
+			{
+				user_id = Guid.NewGuid().ToString(),
+				name = userName
+			}
+		};
 
-                await SendMessageAsync(JsonConvert.SerializeObject(connectMessage));
+		await SendMessageAsync(JsonConvert.SerializeObject(connectMessage));
 
-                // Start listening for messages
-                _ = Task.Run(ReceiveMessagesAsync);
-            }
-            catch (Exception ex)
-            {
-                ErrorOccurred?.Invoke(this, ex.Message);
-                throw;
-            }
-        }
+		// Start listening for messages
+		_ = Task.Run(ReceiveMessagesAsync);
+	}
+	catch (Exception ex)
+	{
+		ErrorOccurred?.Invoke(this, ex.Message);
+		throw;
+	}
+}
 
         public async Task DisconnectAsync()
         {
@@ -94,35 +98,85 @@ namespace StellarSync.Services
         }
 
         public async Task SendCharacterDataAsync(object characterData)
-        {
-            if (!isConnected)
-            {
-                throw new InvalidOperationException("Not connected to server");
-            }
+{
+	if (!isConnected)
+	{
+		throw new InvalidOperationException("Not connected to server");
+	}
 
-            try
-            {
-                var message = new
-                {
-                    type = "character_data",
-                    client = "stellar_sync",
-                    data = characterData
-                };
+	try
+	{
+		var message = new
+		{
+			type = "character_data",
+			client = "stellar_sync",
+			data = characterData
+		};
 
-                var jsonMessage = JsonConvert.SerializeObject(message);
-                
-                // Log message size for debugging
-                var messageSize = Encoding.UTF8.GetByteCount(jsonMessage);
-                System.Diagnostics.Debug.WriteLine($"Sending character data message, size: {messageSize} bytes");
-                
-                await SendMessageAsync(jsonMessage);
-            }
-            catch (Exception ex)
-            {
-                ErrorOccurred?.Invoke(this, $"Failed to send character data: {ex.Message}");
-                throw;
-            }
-        }
+		var jsonMessage = JsonConvert.SerializeObject(message);
+		
+		// Log message size for debugging
+		var messageSize = Encoding.UTF8.GetByteCount(jsonMessage);
+		System.Diagnostics.Debug.WriteLine($"Sending character data message, size: {messageSize} bytes");
+		
+		await SendMessageAsync(jsonMessage);
+	}
+	catch (Exception ex)
+	{
+		ErrorOccurred?.Invoke(this, $"Failed to send character data: {ex.Message}");
+		throw;
+	}
+}
+
+public async Task RequestUsersAsync()
+{
+	if (!isConnected)
+	{
+		throw new InvalidOperationException("Not connected to server");
+	}
+
+	try
+	{
+		var message = new
+		{
+			type = "request_users"
+		};
+
+		await SendMessageAsync(JsonConvert.SerializeObject(message));
+	}
+	catch (Exception ex)
+	{
+		ErrorOccurred?.Invoke(this, $"Failed to request users: {ex.Message}");
+		throw;
+	}
+}
+
+public async Task RequestUserDataAsync(string userId)
+{
+	if (!isConnected)
+	{
+		throw new InvalidOperationException("Not connected to server");
+	}
+
+	try
+	{
+		var message = new
+		{
+			type = "request_user_data",
+			data = new
+			{
+				user_id = userId
+			}
+		};
+
+		await SendMessageAsync(JsonConvert.SerializeObject(message));
+	}
+	catch (Exception ex)
+	{
+		ErrorOccurred?.Invoke(this, $"Failed to request user data: {ex.Message}");
+		throw;
+	}
+}
 
         private async Task ReceiveMessagesAsync()
         {

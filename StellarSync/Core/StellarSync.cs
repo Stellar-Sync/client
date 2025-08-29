@@ -58,10 +58,12 @@ namespace StellarSync
             this.SettingsUi = new SettingsUI();
             
             // Wire up services to UI
-            this.PluginUi.SetNetworkService(this.NetworkService);
-            this.PluginUi.SetSettingsUI(this.SettingsUi);
-            this.PluginUi.SetModIntegrationService(this.ModIntegrationService);
-            this.SettingsUi.SetNetworkService(this.NetworkService);
+this.PluginUi.SetNetworkService(this.NetworkService);
+this.PluginUi.SetSettingsUI(this.SettingsUi);
+this.PluginUi.SetModIntegrationService(this.ModIntegrationService);
+this.PluginUi.SetPluginLog(this.PluginLog);
+this.PluginUi.SetClientState(this.ClientState);
+this.SettingsUi.SetNetworkService(this.NetworkService);
             
             // Load configuration into UI
             this.SettingsUi.LoadConfiguration(this.Configuration);

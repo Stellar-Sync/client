@@ -79,14 +79,20 @@ namespace StellarSync.Services
                 }
 
                 // Get Penumbra data
-                if (_modIntegrationService.PenumbraAvailable)
-                {
-                    var penumbraData = await _modIntegrationService.GetPenumbraDataAsync(playerAddress);
-                    characterData.PenumbraData = penumbraData;
-                    
-                    var metaManipulations = _modIntegrationService.GetPenumbraMetaManipulations();
-                    characterData.PenumbraMetaManipulations = metaManipulations;
-                }
+if (_modIntegrationService.PenumbraAvailable)
+{
+	var penumbraData = await _modIntegrationService.GetPenumbraDataAsync(playerAddress);
+	characterData.PenumbraData = penumbraData;
+	
+	var metaManipulations = _modIntegrationService.GetPenumbraMetaManipulations();
+	characterData.PenumbraMetaManipulations = metaManipulations;
+	
+	// Get Penumbra files for transfer
+	if (penumbraData.Count > 0)
+	{
+		characterData.PenumbraFiles = await _modIntegrationService.GetPenumbraFilesForTransfer(penumbraData);
+	}
+}
             }
             catch (Exception ex)
             {

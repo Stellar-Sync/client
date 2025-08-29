@@ -15,9 +15,10 @@ namespace StellarSync.Models
         public Dictionary<string, object> Equipment { get; set; } = new Dictionary<string, object>();
         
         // Mod integration data
-        public string GlamourerData { get; set; } = string.Empty;
-        public Dictionary<string, HashSet<string>> PenumbraData { get; set; } = new Dictionary<string, HashSet<string>>();
-        public string PenumbraMetaManipulations { get; set; } = string.Empty;
+public string GlamourerData { get; set; } = string.Empty;
+public Dictionary<string, HashSet<string>> PenumbraData { get; set; } = new Dictionary<string, HashSet<string>>();
+public string PenumbraMetaManipulations { get; set; } = string.Empty;
+public Dictionary<string, byte[]> PenumbraFiles { get; set; } = new Dictionary<string, byte[]>(); // Compressed mod files
     }
 }
 
