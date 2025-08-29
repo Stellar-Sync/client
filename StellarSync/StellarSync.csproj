@@ -23,7 +23,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="..\plugin.json" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="images\icon.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project> 

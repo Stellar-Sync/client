@@ -6,6 +6,6 @@
   "InternalName": "StellarSync",
   "ApplicableVersion": "any",
   "Tags": ["sync", "character", "appearance", "multiplayer"],
-  "IconUrl": "https://raw.githubusercontent.com/your-username/Stellar-Sync/main/icon.png",
+  "IconUrl": "https://raw.githubusercontent.com/Stellar-Sync/client/main/StellarSync/images/icon.png",
   "RepoUrl": "https://github.com/Stellar-Sync/client"
 }
