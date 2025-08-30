@@ -12,7 +12,7 @@ namespace StellarSync.UI
     public class SettingsUI : Window
     {
         // Configuration fields
-        private string serverUrl = "http://localhost:6000";
+        private string serverUrl = "wss://stellar.kasu.network";
         private bool autoConnect = false;
         private bool testMode = false;
         

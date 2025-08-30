@@ -269,7 +269,7 @@ private void OnNetworkError(object? sender, string error)
 	if (this.modIntegrationService != null)
 	{
 		// Use the same server URL as the network service - it will proxy to file server
-		var serverUrl = settingsUI?.GetServerUrl() ?? "http://localhost:6000";
+		                        var serverUrl = settingsUI?.GetServerUrl() ?? "wss://stellar.kasu.network";
 		this.modIntegrationService.InitializeHttpFileService(serverUrl);
 		
 
@@ -323,7 +323,7 @@ public void SetPluginLog(IPluginLog pluginLog)
                 UpdateConnectionStatus(true, "Connecting...");
                 
                 // Get connection settings from settings UI
-                var serverUrl = settingsUI?.GetServerUrl() ?? "http://localhost:6000";
+                var serverUrl = settingsUI?.GetServerUrl() ?? "wss://stellar.kasu.network";
                 var testMode = settingsUI?.GetTestMode() ?? false;
                 
                 // Update HttpFileService with the correct server URL

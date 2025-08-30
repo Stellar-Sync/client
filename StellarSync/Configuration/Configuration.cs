@@ -11,7 +11,7 @@ namespace StellarSync.Configuration
         public int Version { get; set; } = 0;
 
         // Connection settings
-        private string _serverUrl = "http://localhost:6000";
+        private string _serverUrl = "wss://stellar.kasu.network";
         private bool _autoConnect = false;
         private bool _testMode = false;
 
