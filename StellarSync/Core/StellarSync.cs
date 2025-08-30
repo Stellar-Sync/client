@@ -24,6 +24,7 @@ namespace StellarSync
         private readonly IGameGui GameGui;
         private readonly IPluginLog PluginLog;
         private readonly IChatGui ChatGui;
+        private readonly IFramework Framework;
         private readonly WindowSystem WindowSystem;
         private readonly PluginUI PluginUi;
         private readonly SettingsUI SettingsUi;
@@ -36,7 +37,7 @@ namespace StellarSync
         private readonly FileDialogManager FileDialogManager;
 
         public StellarSync(IDalamudPluginInterface pluginInterface, ICommandManager commandManager,
-            IClientState clientState, IObjectTable objectTable, IGameGui gameGui, IPluginLog pluginLog, IChatGui chatGui)
+            IClientState clientState, IObjectTable objectTable, IGameGui gameGui, IPluginLog pluginLog, IChatGui chatGui, IFramework framework)
         {
             this.PluginInterface = pluginInterface;
             this.CommandManager = commandManager;
@@ -45,6 +46,7 @@ namespace StellarSync
             this.GameGui = gameGui;
             this.PluginLog = pluginLog;
             this.ChatGui = chatGui;
+            this.Framework = framework;
             
             // Initialize configuration - load from Dalamud's config system
             this.Configuration = pluginInterface.GetPluginConfig() as Configuration.Configuration ?? new Configuration.Configuration();
@@ -52,7 +54,7 @@ namespace StellarSync
             
             // Create services
             this.NetworkService = new NetworkService();
-            this.ModIntegrationService = new ModIntegrationService(PluginLog, PluginInterface);
+            this.ModIntegrationService = new ModIntegrationService(PluginLog, PluginInterface, this.Configuration, ObjectTable, ClientState, Framework);
             this.ReceivedModsService = new ReceivedModsService(this.Configuration, PluginLog);
             this.CharacterSyncService = new CharacterSyncService(this.NetworkService, this.Configuration, 
                 this.ClientState, this.ObjectTable, this.ModIntegrationService);

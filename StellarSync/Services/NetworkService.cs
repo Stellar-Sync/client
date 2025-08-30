@@ -14,6 +14,7 @@ namespace StellarSync.Services
         private ClientWebSocket? webSocket;
         private CancellationTokenSource? cancellationTokenSource;
         private bool isConnected = false;
+        private string currentUserId = string.Empty;
 
         public event EventHandler<string>? MessageReceived;
         public event EventHandler? Connected;
@@ -41,13 +42,16 @@ namespace StellarSync.Services
 		isConnected = true;
 		Connected?.Invoke(this, EventArgs.Empty);
 
+		// Generate and store user ID
+		currentUserId = Guid.NewGuid().ToString();
+		
 		// Send connection message with user info
 		var connectMessage = new
 		{
 			type = "connect",
 			data = new
 			{
-				user_id = Guid.NewGuid().ToString(),
+				user_id = currentUserId,
 				name = userName
 			}
 		};
@@ -75,6 +79,11 @@ namespace StellarSync.Services
             isConnected = false;
             Disconnected?.Invoke(this, EventArgs.Empty);
         }
+        
+        public string GetCurrentUserId()
+        {
+            return currentUserId;
+        }
 
         public async Task SendMessageAsync(string message)
         {
@@ -83,11 +92,27 @@ namespace StellarSync.Services
                 try
                 {
                     var buffer = Encoding.UTF8.GetBytes(message);
+                    var messageSize = buffer.Length;
+                    
+                    // Log message size for debugging
+                    System.Diagnostics.Debug.WriteLine($"DEBUG: Sending message of size: {messageSize} bytes ({messageSize / (1024.0 * 1024.0):F2} MB)");
+                    
+                    // Check if message is too large (over 10MB)
+                    if (messageSize > 10 * 1024 * 1024)
+                    {
+                        System.Diagnostics.Debug.WriteLine($"WARNING: Large message detected ({messageSize / (1024.0 * 1024.0):F2} MB), this may cause connection issues");
+                    }
+                    
+                    // Send the message
                     await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancellationTokenSource?.Token ?? CancellationToken.None);
+                    
+                    System.Diagnostics.Debug.WriteLine($"DEBUG: Message sent successfully");
                 }
                 catch (Exception ex)
                 {
-                    ErrorOccurred?.Invoke(this, $"Failed to send message: {ex.Message}");
+                    var errorMessage = $"Failed to send message: {ex.Message}";
+                    System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
+                    ErrorOccurred?.Invoke(this, errorMessage);
                     throw;
                 }
             }
@@ -122,7 +147,19 @@ namespace StellarSync.Services
 		
 		// Log message size for debugging
 		var messageSize = Encoding.UTF8.GetByteCount(jsonMessage);
-		System.Diagnostics.Debug.WriteLine($"Sending character data message, size: {messageSize} bytes");
+		System.Diagnostics.Debug.WriteLine($"Sending character data message, size: {messageSize} bytes ({messageSize / (1024.0 * 1024.0):F2} MB)");
+		
+		// Check if message is too large
+		if (messageSize > 1024 * 1024) // 1MB
+		{
+			System.Diagnostics.Debug.WriteLine($"WARNING: Large message detected ({messageSize / (1024.0 * 1024.0):F2} MB) - this may cause issues");
+		}
+		
+		// Debug: Check if message contains problematic characters
+		if (jsonMessage.Contains("\\"))
+		{
+			System.Diagnostics.Debug.WriteLine($"WARNING: Message contains backslashes - this may cause JSON parsing issues");
+		}
 		
 		// Debug: Log what's actually being sent
 		System.Diagnostics.Debug.WriteLine($"DEBUG: Message structure - type: {message.type}, client: {message.client}");
@@ -168,21 +205,16 @@ private object ConvertCharacterDataForSerialization(object characterData)
 			var value = property.GetValue(characterData);
 			System.Diagnostics.Debug.WriteLine($"DEBUG: Property {property.Name}: {value?.GetType().Name ?? "null"}");
 			
-			if (property.Name == "PenumbraFiles" && value is Dictionary<string, byte[]> penumbraFiles)
+			if (property.Name == "PenumbraFileMetadata" && value is Dictionary<string, object> penumbraFileMetadata)
 			{
-				System.Diagnostics.Debug.WriteLine($"DEBUG: Found PenumbraFiles with {penumbraFiles.Count} entries");
-				// Convert byte arrays to base64 strings
-				var convertedFiles = new Dictionary<string, string>();
-				foreach (var kvp in penumbraFiles)
-				{
-					convertedFiles[kvp.Key] = Convert.ToBase64String(kvp.Value);
-				}
-				serializableData[property.Name] = convertedFiles;
-				System.Diagnostics.Debug.WriteLine($"DEBUG: Converted PenumbraFiles to {convertedFiles.Count} base64 strings");
+				System.Diagnostics.Debug.WriteLine($"DEBUG: Found PenumbraFileMetadata with {penumbraFileMetadata.Count} entries");
+				// File metadata is already JSON-serializable, no conversion needed
+				serializableData[property.Name] = penumbraFileMetadata;
+				System.Diagnostics.Debug.WriteLine($"DEBUG: Added PenumbraFileMetadata with {penumbraFileMetadata.Count} entries");
 			}
-			else if (property.Name == "PenumbraFiles")
+			else if (property.Name == "PenumbraFileMetadata")
 			{
-				System.Diagnostics.Debug.WriteLine($"DEBUG: PenumbraFiles property found but value is {value?.GetType().Name ?? "null"}");
+				System.Diagnostics.Debug.WriteLine($"DEBUG: PenumbraFileMetadata property found but value is {value?.GetType().Name ?? "null"}");
 				// Keep as-is for now
 				serializableData[property.Name] = value;
 			}
@@ -194,6 +226,25 @@ private object ConvertCharacterDataForSerialization(object characterData)
 		}
 		
 		System.Diagnostics.Debug.WriteLine($"DEBUG: Serialization complete, returning {serializableData.Count} properties");
+		
+		// Debug: Check if penumbra_file_metadata has any problematic characters
+		if (serializableData.ContainsKey("PenumbraFileMetadata") && serializableData["PenumbraFileMetadata"] is Dictionary<string, object> metadata)
+		{
+			System.Diagnostics.Debug.WriteLine($"DEBUG: PenumbraFileMetadata contains {metadata.Count} entries");
+			var sampleEntry = metadata.FirstOrDefault();
+			if (!sampleEntry.Equals(default(KeyValuePair<string, object>)))
+			{
+				System.Diagnostics.Debug.WriteLine($"DEBUG: Sample metadata key: {sampleEntry.Key}");
+				if (sampleEntry.Value is Dictionary<string, object> fileMetadata)
+				{
+					foreach (var kvp in fileMetadata)
+					{
+						System.Diagnostics.Debug.WriteLine($"DEBUG: File metadata field '{kvp.Key}': {kvp.Value}");
+					}
+				}
+			}
+		}
+		
 		return serializableData;
 	}
 	catch (Exception ex)

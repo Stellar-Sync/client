@@ -18,7 +18,7 @@ namespace StellarSync.Models
 public string GlamourerData { get; set; } = string.Empty;
 public Dictionary<string, HashSet<string>> PenumbraData { get; set; } = new Dictionary<string, HashSet<string>>();
 public string PenumbraMetaManipulations { get; set; } = string.Empty;
-public Dictionary<string, byte[]> PenumbraFiles { get; set; } = new Dictionary<string, byte[]>(); // Compressed mod files
+public Dictionary<string, object> PenumbraFileMetadata { get; set; } = new Dictionary<string, object>(); // File metadata for HTTP transfer
     }
 }
 

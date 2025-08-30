@@ -98,27 +98,28 @@ if (_modIntegrationService.PenumbraAvailable)
 	var metaManipulations = _modIntegrationService.GetPenumbraMetaManipulations();
 	characterData.PenumbraMetaManipulations = metaManipulations;
 	
-	// Get Penumbra files for transfer
-	if (penumbraData.Count > 0)
-	{
-		SyncError?.Invoke(this, $"Getting Penumbra files for transfer from {penumbraData.Count} categories...");
-		characterData.PenumbraFiles = await _modIntegrationService.GetPenumbraFilesForTransfer(penumbraData);
-		SyncError?.Invoke(this, $"Penumbra files prepared: {characterData.PenumbraFiles.Count} files");
-		
-		// Debug: Log the actual PenumbraFiles dictionary
-		if (characterData.PenumbraFiles != null)
+			// Get Penumbra file metadata for transfer (new approach)
+		if (penumbraData.Count > 0)
 		{
-			SyncError?.Invoke(this, $"DEBUG: PenumbraFiles dictionary created with {characterData.PenumbraFiles.Count} entries");
-			foreach (var kvp in characterData.PenumbraFiles.Take(3))
+			SyncError?.Invoke(this, $"Getting Penumbra file metadata for transfer from {penumbraData.Count} categories...");
+			characterData.PenumbraFileMetadata = await _modIntegrationService.GetPenumbraFileMetadataForTransfer(penumbraData);
+			SyncError?.Invoke(this, $"Penumbra file metadata prepared: {characterData.PenumbraFileMetadata.Count} files");
+			
+			// Debug: Log the actual PenumbraFileMetadata dictionary
+			if (characterData.PenumbraFileMetadata != null)
 			{
-				SyncError?.Invoke(this, $"DEBUG: File {kvp.Key}: {kvp.Value.Length} bytes");
+				SyncError?.Invoke(this, $"DEBUG: PenumbraFileMetadata dictionary created with {characterData.PenumbraFileMetadata.Count} entries");
+				var sampleEntries = characterData.PenumbraFileMetadata.Take(3).ToList();
+				foreach (var kvp in sampleEntries)
+				{
+					SyncError?.Invoke(this, $"DEBUG: File metadata {kvp.Key}");
+				}
+			}
+			else
+			{
+				SyncError?.Invoke(this, "DEBUG: PenumbraFileMetadata is null!");
 			}
 		}
-		else
-		{
-			SyncError?.Invoke(this, "DEBUG: PenumbraFiles is null!");
-		}
-	}
 	else
 	{
 		SyncError?.Invoke(this, "No Penumbra data found, skipping file transfer");

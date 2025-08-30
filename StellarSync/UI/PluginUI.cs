@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
 using System.Threading.Tasks;
 using Dalamud.Interface.Windowing;
@@ -13,6 +14,28 @@ using StellarSync.Services;
 
 namespace StellarSync.UI
 {
+    // Sync progress tracking class
+    public class SyncProgress
+    {
+        public string UserId { get; set; } = "";
+        public string UserName { get; set; } = "";
+        public string Status { get; set; } = "Waiting...";
+        public float Progress { get; set; } = 0.0f; // 0.0 to 1.0
+        public DateTime StartTime { get; set; } = DateTime.Now;
+        public bool IsActive { get; set; } = true;
+        
+        public string GetElapsedTime()
+        {
+            var elapsed = DateTime.Now - StartTime;
+            if (elapsed.TotalSeconds < 60)
+                return $"{elapsed.TotalSeconds:F1}s";
+            else if (elapsed.TotalMinutes < 60)
+                return $"{elapsed.TotalMinutes:F1}m";
+            else
+                return $"{elapsed.TotalHours:F1}h";
+        }
+    }
+
     public class PluginUI : Window
     {
         private bool isConnected = false;
@@ -30,8 +53,11 @@ namespace StellarSync.UI
         private string applyTestResult = "";
 private string sendToServerResult = "";
 private List<dynamic> onlineUsers = new List<dynamic>();
-private string selectedUserId = "";
-private string pairResult = "";
+        private string selectedUserId = "";
+        private string pairResult = "";
+        
+        // Loading bar system for sync progress
+        private Dictionary<string, SyncProgress> userSyncProgress = new Dictionary<string, SyncProgress>();
         
                 // Services
         private NetworkService? networkService;
@@ -76,6 +102,118 @@ private string pairResult = "";
             };
         }
 
+        // Sync progress management methods
+        public void StartSyncProgress(string userId, string userName)
+        {
+            userSyncProgress[userId] = new SyncProgress
+            {
+                UserId = userId,
+                UserName = userName,
+                Status = "Starting sync...",
+                Progress = 0.0f,
+                StartTime = DateTime.Now,
+                IsActive = true
+            };
+        }
+        
+        public void UpdateSyncProgress(string userId, string status, float progress)
+        {
+            if (userSyncProgress.ContainsKey(userId))
+            {
+                userSyncProgress[userId].Status = status;
+                userSyncProgress[userId].Progress = Math.Max(0.0f, Math.Min(1.0f, progress));
+            }
+        }
+        
+        public void CompleteSyncProgress(string userId)
+        {
+            if (userSyncProgress.ContainsKey(userId))
+            {
+                userSyncProgress[userId].Status = "Complete!";
+                userSyncProgress[userId].Progress = 1.0f;
+                userSyncProgress[userId].IsActive = false;
+                
+                // Remove after 3 seconds
+                Task.Delay(3000).ContinueWith(_ => 
+                {
+                    if (userSyncProgress.ContainsKey(userId))
+                        userSyncProgress.Remove(userId);
+                });
+            }
+        }
+        
+        public void FailSyncProgress(string userId, string error)
+        {
+            if (userSyncProgress.ContainsKey(userId))
+            {
+                userSyncProgress[userId].Status = $"Failed: {error}";
+                userSyncProgress[userId].IsActive = false;
+                
+                // Remove after 5 seconds
+                Task.Delay(5000).ContinueWith(_ => 
+                {
+                    if (userSyncProgress.ContainsKey(userId))
+                        userSyncProgress.Remove(userId);
+                });
+            }
+        }
+        
+        // Draw loading bar for a user
+        private void DrawSyncProgressBar(SyncProgress progress)
+        {
+            var barWidth = 200.0f;
+            var barHeight = 8.0f;
+            var padding = 4.0f;
+            
+            // Get cursor position for the bar
+            var cursorPos = ImGui.GetCursorPos();
+            var barPos = new Vector2(cursorPos.X, cursorPos.Y);
+            
+            // Draw background bar
+            var bgColor = new Vector4(0.2f, 0.2f, 0.2f, 0.8f);
+            ImGui.GetWindowDrawList().AddRectFilled(
+                barPos,
+                barPos + new Vector2(barWidth, barHeight),
+                ImGui.ColorConvertFloat4ToU32(bgColor),
+                2.0f
+            );
+            
+            // Draw progress bar
+            var progressColor = progress.IsActive ? 
+                new Vector4(0.2f, 0.8f, 0.2f, 0.9f) : // Green for active
+                new Vector4(0.8f, 0.2f, 0.2f, 0.9f);  // Red for failed
+                
+            ImGui.GetWindowDrawList().AddRectFilled(
+                barPos,
+                barPos + new Vector2(barWidth * progress.Progress, barHeight),
+                ImGui.ColorConvertFloat4ToU32(progressColor),
+                2.0f
+            );
+            
+            // Draw border
+            var borderColor = new Vector4(0.5f, 0.5f, 0.5f, 0.8f);
+            ImGui.GetWindowDrawList().AddRect(
+                barPos,
+                barPos + new Vector2(barWidth, barHeight),
+                ImGui.ColorConvertFloat4ToU32(borderColor),
+                2.0f,
+                0,
+                1.0f
+            );
+            
+            // Move cursor past the bar
+            ImGui.SetCursorPos(barPos + new Vector2(0, barHeight + padding));
+            
+            // Draw status text
+            var statusColor = progress.IsActive ? 
+                new Vector4(0.8f, 0.8f, 0.8f, 1.0f) : // Light gray for active
+                new Vector4(1.0f, 0.5f, 0.5f, 1.0f);  // Light red for failed
+                
+            ImGui.TextColored(statusColor, progress.Status);
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(0.6f, 0.6f, 0.6f, 1.0f), $"({progress.GetElapsedTime()})");
+        }
+
         public void SetNetworkService(NetworkService networkService)
 {
 	this.networkService = networkService;
@@ -111,14 +249,31 @@ private void OnNetworkError(object? sender, string error)
 	UpdateConnectionStatus(false, $"Error: {error}");
 }
 
-        public void SetSettingsUI(SettingsUI settingsUI)
-        {
-            this.settingsUI = settingsUI;
-        }
+        	public void SetSettingsUI(SettingsUI settingsUI)
+{
+	this.settingsUI = settingsUI;
+	
+	// Update HttpFileService with the correct server URL if it's already initialized
+	if (this.modIntegrationService != null && this.settingsUI != null)
+	{
+		var serverUrl = this.settingsUI.GetServerUrl();
+		this.modIntegrationService.InitializeHttpFileService(serverUrl);
+	}
+}
 
-        public void SetModIntegrationService(ModIntegrationService modIntegrationService)
+        	public void SetModIntegrationService(ModIntegrationService modIntegrationService)
 {
 	this.modIntegrationService = modIntegrationService;
+	
+	// Initialize HTTP file service for file transfers
+	if (this.modIntegrationService != null)
+	{
+		// Use the same server URL as the network service - it will proxy to file server
+		var serverUrl = settingsUI?.GetServerUrl() ?? "http://localhost:6000";
+		this.modIntegrationService.InitializeHttpFileService(serverUrl);
+		
+
+	}
 }
 
 public void SetPluginLog(IPluginLog pluginLog)
@@ -170,6 +325,12 @@ public void SetPluginLog(IPluginLog pluginLog)
                 // Get connection settings from settings UI
                 var serverUrl = settingsUI?.GetServerUrl() ?? "http://localhost:6000";
                 var testMode = settingsUI?.GetTestMode() ?? false;
+                
+                // Update HttpFileService with the correct server URL
+                if (modIntegrationService != null)
+                {
+                    modIntegrationService.InitializeHttpFileService(serverUrl);
+                }
                 
                 if (testMode)
                 {
@@ -313,12 +474,50 @@ public void SetPluginLog(IPluginLog pluginLog)
 	{
 		UpdateTestInfo("Sending character data to server...");
 		
-		// Create character data object
+		// Get the current character name
+		var characterName = GetPlayerCharacterName();
+		
+		// Get Penumbra file metadata for transfer (upload via HTTP, not WebSocket)
+		Dictionary<string, object> penumbraFileMetadata = null;
+		try
+		{
+			var penumbraDataDict = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
+			if (penumbraDataDict.Count > 0)
+			{
+				penumbraFileMetadata = await modIntegrationService.GetPenumbraFileMetadataForTransfer(penumbraDataDict);
+				pluginLog?.Information($"DEBUG: Prepared metadata for {penumbraFileMetadata?.Count ?? 0} Penumbra files");
+				
+				// Upload file metadata via HTTP (not WebSocket)
+				if (penumbraFileMetadata != null && penumbraFileMetadata.Count > 0)
+				{
+					var userId = GetPlayerUserId(); // Get current user ID
+					if (!string.IsNullOrEmpty(userId))
+					{
+						var uploadSuccess = await modIntegrationService.UploadFileMetadataAsync(userId, penumbraFileMetadata);
+						if (uploadSuccess)
+						{
+							pluginLog?.Information($"Successfully uploaded file metadata via HTTP for {penumbraFileMetadata.Count} files");
+						}
+						else
+						{
+							pluginLog?.Warning($"Failed to upload file metadata via HTTP");
+						}
+					}
+				}
+			}
+		}
+		catch (Exception fileEx)
+		{
+			pluginLog?.Warning($"Failed to prepare Penumbra file metadata for transfer: {fileEx.Message}");
+		}
+		
+		// Create character data object (core data only - file metadata sent via HTTP)
 		var characterData = new
 		{
+			character_name = characterName,
 			glamourer_data = glamourerData,
 			penumbra_meta = penumbraMetaData,
-			penumbra_files = penumbraData,
+			// penumbra_file_metadata = penumbraFileMetadata, // File metadata sent via HTTP endpoint
 			timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
 		};
 
@@ -344,14 +543,30 @@ private async void RequestUserData(string userId)
 	
 	try
 	{
+		// Get user name for progress tracking
+		var userName = "Unknown";
+		foreach (var user in onlineUsers)
+		{
+			if (user?.id?.ToString() == userId)
+			{
+				userName = user?.name?.ToString() ?? "Unknown";
+				break;
+			}
+		}
+		
+		// Start sync progress
+		StartSyncProgress(userId, userName);
+		UpdateSyncProgress(userId, "Requesting data...", 0.1f);
+		
 		await networkService.RequestUserDataAsync(userId);
 		pairResult = $"Requesting data from user {userId}...";
 	}
 	catch (Exception ex)
-{
-	pairResult = $"Error: {ex.Message}";
-	pluginLog?.Error($"Failed to request user data: {ex.Message}");
-}
+	{
+		pairResult = $"Error: {ex.Message}";
+		pluginLog?.Error($"Failed to request user data: {ex.Message}");
+		FailSyncProgress(userId, ex.Message);
+	}
 }
 
 private void HandleServerMessage(string message)
@@ -411,47 +626,108 @@ private void HandleUserCharacterData(dynamic data)
 			// Store the received character data
 			var characterData = data.data;
 			
-			// Apply the received data to the local character
+			// Get the source character name
+			var sourceCharacterName = data.source_character_name?.ToString();
+			
+			// CRITICAL SAFEGUARD: Never apply data without a valid character name
+			if (string.IsNullOrEmpty(sourceCharacterName))
+			{
+				pluginLog?.Error("CRITICAL: Received character data without source character name - REJECTING ALL APPLICATIONS");
+				pairResult = "CRITICAL ERROR: Cannot apply data without source character name";
+				return;
+			}
+			
+			pluginLog?.Information($"Applying character data to source character: {sourceCharacterName}");
+			
+			// Get user ID for progress tracking
+			var userId = GetUserIdFromCharacterName(sourceCharacterName);
+			if (!string.IsNullOrEmpty(userId))
+			{
+				UpdateSyncProgress(userId, "Applying Glamourer data...", 0.3f);
+			}
+			
+			// Apply the received data to the source character (not local player)
 			if (characterData?.glamourer_data != null)
-			{
-				_ = Task.Run(async () => await modIntegrationService.ApplyGlamourerData(characterData.glamourer_data.ToString()));
-			}
-			
-			if (characterData?.penumbra_meta != null)
-			{
-				_ = Task.Run(async () => await modIntegrationService.ApplyPenumbraMetaData(characterData.penumbra_meta.ToString()));
-			}
-			
-			// Apply Penumbra files if available
-			if (characterData?.penumbra_files != null)
 			{
 				_ = Task.Run(async () => 
 				{
 					try
 					{
-						// Convert dynamic penumbra_files to Dictionary<string, byte[]>
-						var penumbraFiles = new Dictionary<string, byte[]>();
-						foreach (var kvp in characterData.penumbra_files)
+						await modIntegrationService.ApplyGlamourerData(characterData.glamourer_data.ToString(), sourceCharacterName);
+						if (!string.IsNullOrEmpty(userId))
 						{
-							if (kvp.Value is byte[] fileBytes)
-							{
-								penumbraFiles[kvp.Name] = fileBytes;
-							}
-						}
-						
-						if (penumbraFiles.Count > 0)
-						{
-							var sourceCharacterName = data.source_character_name?.ToString() ?? "Unknown";
-							var result = await modIntegrationService.ApplyPenumbraFilesFromTransfer(penumbraFiles, sourceCharacterName, receivedModsService);
-							pluginLog?.Information($"Penumbra file transfer result: {result}");
+							UpdateSyncProgress(userId, "Applying Penumbra meta...", 0.5f);
 						}
 					}
 					catch (Exception ex)
 					{
-						pluginLog?.Error($"Failed to apply Penumbra files: {ex.Message}");
+						if (!string.IsNullOrEmpty(userId))
+						{
+							FailSyncProgress(userId, $"Glamourer error: {ex.Message}");
+						}
 					}
 				});
 			}
+			
+			if (characterData?.penumbra_meta != null)
+			{
+				_ = Task.Run(async () => 
+				{
+					try
+					{
+						await modIntegrationService.ApplyPenumbraMetaData(characterData.penumbra_meta.ToString(), sourceCharacterName);
+						if (!string.IsNullOrEmpty(userId))
+						{
+							UpdateSyncProgress(userId, "Downloading mod files...", 0.7f);
+						}
+					}
+					catch (Exception ex)
+					{
+						if (!string.IsNullOrEmpty(userId))
+						{
+							FailSyncProgress(userId, $"Penumbra meta error: {ex.Message}");
+						}
+					}
+				});
+			}
+			
+			// Handle Penumbra file metadata (fetch from HTTP and download files)
+			// Since we moved file metadata to HTTP, we need to fetch it from the source user
+			_ = Task.Run(async () => 
+			{
+				try
+				{
+					pluginLog?.Information($"Fetching file metadata for {sourceCharacterName} via HTTP...");
+					
+					// Get the source user ID from the top-level data object (not the nested character data)
+					var sourceUserId = GetSourceUserId(data);
+					if (!string.IsNullOrEmpty(sourceUserId))
+					{
+						// Download file metadata from HTTP server
+						var fileMetadata = await modIntegrationService.DownloadFileMetadataAsync(sourceUserId);
+						
+						if (fileMetadata != null && fileMetadata.Count > 0)
+						{
+							pluginLog?.Information($"Retrieved file metadata for {fileMetadata.Count} files from {sourceCharacterName}");
+							
+							// Download and apply the files
+							await DownloadAndApplyFilesAsync(fileMetadata, sourceCharacterName);
+						}
+						else
+						{
+							pluginLog?.Information($"No file metadata found for {sourceCharacterName}");
+						}
+					}
+					else
+					{
+						pluginLog?.Warning($"Could not determine source user ID for {sourceCharacterName}");
+					}
+				}
+				catch (Exception ex)
+				{
+					pluginLog?.Error($"Failed to fetch and apply file metadata: {ex.Message}");
+				}
+			});
 			
 			pairResult = "Character data applied successfully!";
 		}
@@ -483,12 +759,281 @@ private string GetPlayerCharacterName()
 			return $"Player_{DateTime.Now:HHmmss}";
 		}
 	}
-	catch (Exception ex)
-	{
-		pluginLog?.Warning($"Failed to get character name: {ex.Message}");
-		return $"Player_{DateTime.Now:HHmmss}";
+			catch (Exception ex)
+		{
+			pluginLog?.Warning($"Failed to get character name: {ex.Message}");
+			return $"Player_{DateTime.Now:HHmmss}";
+		}
 	}
-}
+	
+	private string GetPlayerUserId()
+	{
+		// Get the user ID from the network service
+		if (networkService != null)
+		{
+			return networkService.GetCurrentUserId();
+		}
+		return string.Empty;
+	}
+	
+	private string GetSourceUserId(dynamic characterData)
+	{
+		try
+		{
+			// Debug: Log the structure we're receiving
+			pluginLog?.Information($"DEBUG: GetSourceUserId called with characterData type: {characterData?.GetType().Name}");
+			
+			// Try to access the top-level properties
+			var availableProperties = new List<string>();
+			try
+			{
+				// Try to enumerate properties to see what's available
+				foreach (var prop in characterData.GetType().GetProperties())
+				{
+					availableProperties.Add(prop.Name);
+				}
+			}
+			catch
+			{
+				// If we can't enumerate, try direct access
+				availableProperties.Add("(direct access only)");
+			}
+			
+			pluginLog?.Information($"DEBUG: Available properties: {string.Join(", ", availableProperties)}");
+			
+			// Try different possible locations for user_id
+			if (characterData?.user_id != null)
+			{
+				var userId = characterData.user_id.ToString();
+				pluginLog?.Information($"Found source user ID at user_id: {userId}");
+				return userId;
+			}
+			
+			if (characterData?.source_user_id != null)
+			{
+				var userId = characterData.source_user_id.ToString();
+				pluginLog?.Information($"Found source user ID at source_user_id: {userId}");
+				return userId;
+			}
+			
+			if (characterData?.target_user_id != null)
+			{
+				var userId = characterData.target_user_id.ToString();
+				pluginLog?.Information($"Found source user ID at target_user_id: {userId}");
+				return userId;
+			}
+			
+			// If not found, try to get it from the online users list by character name
+			var sourceCharacterName = characterData?.source_character_name?.ToString();
+			if (!string.IsNullOrEmpty(sourceCharacterName))
+			{
+				pluginLog?.Information($"DEBUG: Looking up user ID for character name: {sourceCharacterName}");
+				var userId = GetUserIdFromCharacterName(sourceCharacterName);
+				if (!string.IsNullOrEmpty(userId))
+				{
+					pluginLog?.Information($"Found source user ID from character name: {userId}");
+					return userId;
+				}
+			}
+			
+			pluginLog?.Warning("Source user ID not found in character data - file metadata fetch may fail");
+			pluginLog?.Warning($"DEBUG: Character data structure: {Newtonsoft.Json.JsonConvert.SerializeObject(characterData, Newtonsoft.Json.Formatting.Indented)}");
+			return string.Empty;
+		}
+		catch (Exception ex)
+		{
+			pluginLog?.Error($"Failed to get source user ID: {ex.Message}");
+			return string.Empty;
+		}
+	}
+	
+	private string GetUserIdFromCharacterName(string characterName)
+	{
+		try
+		{
+			// Look through the online users list to find the user ID for this character name
+			foreach (var user in onlineUsers)
+			{
+				if (user?.name?.ToString() == characterName)
+				{
+					return user?.id?.ToString() ?? string.Empty;
+				}
+			}
+			
+			pluginLog?.Warning($"Could not find user ID for character name: {characterName}");
+			return string.Empty;
+		}
+		catch (Exception ex)
+		{
+			pluginLog?.Error($"Failed to get user ID from character name: {ex.Message}");
+			return string.Empty;
+		}
+	}
+	
+	private async Task DownloadAndApplyFilesAsync(Dictionary<string, object> fileMetadata, string sourceCharacterName)
+	{
+		try
+		{
+			if (modIntegrationService == null || receivedModsService == null)
+			{
+				pluginLog?.Error("Required services not available for file download");
+				return;
+			}
+			
+			// Get user ID for progress tracking
+			var userId = GetUserIdFromCharacterName(sourceCharacterName);
+			
+			pluginLog?.Information($"Starting download and application of {fileMetadata.Count} files from {sourceCharacterName}");
+			
+			var downloadCount = 0;
+			var successCount = 0;
+			
+			foreach (var kvp in fileMetadata)
+			{
+				try
+				{
+					var fileKey = kvp.Key;
+					var fileInfo = kvp.Value;
+					
+					// Update progress for each file
+					if (!string.IsNullOrEmpty(userId))
+					{
+						var fileProgress = 0.7f + (0.2f * downloadCount / fileMetadata.Count);
+						UpdateSyncProgress(userId, $"Downloading {fileKey}...", fileProgress);
+					}
+					
+					// Debug: Log the file metadata format
+					pluginLog?.Information($"DEBUG: Processing file {fileKey}, type: {fileInfo?.GetType().Name}");
+					
+					// Debug: Log the full metadata structure for the first file
+					if (fileKey == kvp.Key && downloadCount == 0)
+					{
+						pluginLog?.Information($"DEBUG: Full metadata structure for {fileKey}: {Newtonsoft.Json.JsonConvert.SerializeObject(fileInfo, Newtonsoft.Json.Formatting.Indented)}");
+					}
+					
+					// Parse file metadata - handle both JObject and JsonElement
+					string? hash = null;
+					string? relativePath = null;
+					string? sizeBytes = null;
+					
+					if (fileInfo is Newtonsoft.Json.Linq.JObject fileInfoObj)
+					{
+						// Newtonsoft.Json format
+						hash = fileInfoObj["hash"]?.ToString();
+						relativePath = fileInfoObj["relative_path"]?.ToString();
+						sizeBytes = fileInfoObj["size_bytes"]?.ToString();
+					}
+					else if (fileInfo is System.Text.Json.JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Object)
+					{
+						// System.Text.Json format
+						if (jsonElement.TryGetProperty("hash", out var hashElement))
+							hash = hashElement.GetString();
+						if (jsonElement.TryGetProperty("relative_path", out var pathElement))
+							relativePath = pathElement.GetString();
+						if (jsonElement.TryGetProperty("size_bytes", out var sizeElement))
+						{
+							// Handle both string and number types for size_bytes
+							if (sizeElement.ValueKind == System.Text.Json.JsonValueKind.String)
+								sizeBytes = sizeElement.GetString();
+							else if (sizeElement.ValueKind == System.Text.Json.JsonValueKind.Number)
+								sizeBytes = sizeElement.GetInt64().ToString();
+						}
+					}
+					
+					pluginLog?.Information($"DEBUG: Parsed metadata - hash: {hash}, path: {relativePath}, size: {sizeBytes}");
+					
+					if (!string.IsNullOrEmpty(hash) && !string.IsNullOrEmpty(relativePath))
+					{
+						downloadCount++;
+						
+						// Download file from HTTP server
+						var downloadSuccess = await modIntegrationService.DownloadFileAsync(hash, relativePath);
+						
+						if (downloadSuccess)
+						{
+							successCount++;
+							pluginLog?.Information($"Successfully downloaded file: {relativePath}");
+						}
+						else
+						{
+							pluginLog?.Warning($"Failed to download file: {relativePath}");
+						}
+					}
+					else
+					{
+						pluginLog?.Warning($"Invalid file metadata for {fileKey}: missing hash or relative_path");
+						pluginLog?.Information($"DEBUG: File metadata content: {Newtonsoft.Json.JsonConvert.SerializeObject(fileInfo, Newtonsoft.Json.Formatting.Indented)}");
+					}
+				}
+				catch (Exception ex)
+				{
+					pluginLog?.Error($"Error processing file {kvp.Key}: {ex.Message}");
+				}
+			}
+			
+			pluginLog?.Information($"File download complete: {successCount}/{downloadCount} files downloaded successfully");
+			
+			// Apply the downloaded files to the received mods partition
+			if (successCount > 0)
+			{
+				pluginLog?.Information($"Applying {successCount} downloaded files to received mods partition");
+				
+				// Update progress for file application
+				if (!string.IsNullOrEmpty(userId))
+				{
+					UpdateSyncProgress(userId, "Applying mod files...", 0.9f);
+				}
+				
+				try
+				{
+					// Get the received mods directory path - use the same path as ModIntegrationService
+					var receivedModsPath = modIntegrationService?.GetReceivedModsDirectory();
+					if (string.IsNullOrEmpty(receivedModsPath))
+					{
+						pluginLog?.Error("Received mods path not configured");
+						if (!string.IsNullOrEmpty(userId))
+						{
+							FailSyncProgress(userId, "Received mods path not configured");
+						}
+						return;
+					}
+					
+					pluginLog?.Information($"Applying files to received mods directory: {receivedModsPath}");
+					pluginLog?.Information($"DEBUG: Using ModIntegrationService path: {receivedModsPath}");
+					
+					// Apply the downloaded files to Penumbra
+					var applyResult = await modIntegrationService.ApplyDownloadedFilesToPenumbraAsync(receivedModsPath);
+					pluginLog?.Information($"File application result: {applyResult}");
+					
+					// Complete sync progress
+					if (!string.IsNullOrEmpty(userId))
+					{
+						CompleteSyncProgress(userId);
+					}
+				}
+				catch (Exception ex)
+				{
+					pluginLog?.Error($"Failed to apply downloaded files: {ex.Message}");
+					if (!string.IsNullOrEmpty(userId))
+					{
+						FailSyncProgress(userId, $"File application error: {ex.Message}");
+					}
+				}
+			}
+			else
+			{
+				// No files downloaded, but sync is complete
+				if (!string.IsNullOrEmpty(userId))
+				{
+					CompleteSyncProgress(userId);
+				}
+			}
+		}
+		catch (Exception ex)
+		{
+			pluginLog?.Error($"Failed to download and apply files: {ex.Message}");
+		}
+	}
 
         public override void Draw()
         {
@@ -553,15 +1098,40 @@ if (onlineUsers.Count > 0)
 		var userName = user?.name?.ToString() ?? "Unknown";
 		var userId = user?.id?.ToString() ?? "";
 		
+		// Check if this user has active sync progress
+		var hasProgress = userSyncProgress.ContainsKey(userId);
+		var progress = hasProgress ? userSyncProgress[userId] : null;
+		
+		// User name and pair button on same line
 		ImGui.Text(userName);
 		ImGui.SameLine();
 		
-		// Pair button
-var buttonLabel = $"Pair##{userId}";
-if (ImGui.Button(buttonLabel, new Vector2(60, 20)))
-{
-	RequestUserData(userId);
-}
+		// Pair button (disable if sync is in progress)
+		if (hasProgress && progress.IsActive)
+		{
+			ImGui.BeginDisabled();
+		}
+		
+		var buttonLabel = $"Pair##{userId}";
+		if (ImGui.Button(buttonLabel, new Vector2(60, 20)))
+		{
+			RequestUserData(userId);
+		}
+		
+		if (hasProgress && progress.IsActive)
+		{
+			ImGui.EndDisabled();
+		}
+		
+		// Show loading bar if sync is in progress
+		if (hasProgress)
+		{
+			ImGui.SameLine();
+			ImGui.Text("Syncing...");
+			ImGui.Spacing();
+			DrawSyncProgressBar(progress);
+			ImGui.Spacing();
+		}
 	}
 }
 else
@@ -700,3 +1270,4 @@ if (!string.IsNullOrEmpty(pairResult))
         }
     }
 }
+
