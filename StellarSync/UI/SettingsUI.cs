@@ -1,7 +1,9 @@
 using System;
+using System.IO;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Interface.ImGuiFileDialog;
 using StellarSync.Configuration;
 using StellarSync.Services;
 
@@ -14,12 +16,25 @@ namespace StellarSync.UI
         private bool autoConnect = false;
         private bool testMode = false;
         
+        // Received mods partition settings
+        private string receivedModsPath = "";
+        private long maxReceivedModsSizeGB = 20;
+        private bool autoDeleteOldMods = true;
+        
         // Tab management
         private int selectedTab = 0;
         private readonly string[] tabs = { "Connection", "Sync", "Privacy", "Advanced" };
+        
+        // File dialog manager
+        private readonly FileDialogManager _fileDialogManager;
+        
+        // Configuration reference
+        private Configuration.Configuration? _configuration;
 
-        public SettingsUI() : base("Stellar Sync Settings###StellarSyncSettingsUI")
+        public SettingsUI(FileDialogManager fileDialogManager) : base("Stellar Sync Settings###StellarSyncSettingsUI")
         {
+            _fileDialogManager = fileDialogManager;
+            
             // Set window flags
             Flags = ImGuiWindowFlags.AlwaysAutoResize;
             
@@ -33,9 +48,15 @@ namespace StellarSync.UI
 
         public void LoadConfiguration(Configuration.Configuration config)
         {
+            _configuration = config;
             serverUrl = config.ServerUrl;
             autoConnect = config.AutoConnect;
             testMode = config.TestMode;
+            
+            // Load received mods partition settings
+            receivedModsPath = config.ReceivedModsPath;
+            maxReceivedModsSizeGB = config.MaxReceivedModsSizeGB;
+            autoDeleteOldMods = config.AutoDeleteOldMods;
         }
 
         public void SaveConfiguration(Configuration.Configuration config)
@@ -43,6 +64,12 @@ namespace StellarSync.UI
             config.ServerUrl = serverUrl;
             config.AutoConnect = autoConnect;
             config.TestMode = testMode;
+            
+            // Save received mods partition settings
+            config.ReceivedModsPath = receivedModsPath;
+            config.MaxReceivedModsSizeGB = maxReceivedModsSizeGB;
+            config.AutoDeleteOldMods = autoDeleteOldMods;
+            
             config.Save();
         }
 
@@ -59,8 +86,7 @@ namespace StellarSync.UI
         {
             try
             {
-                ImGui.Text("Stellar Sync Settings");
-                ImGui.Separator();
+                // Window title already shows "Stellar Sync Settings", no need for duplicate header
                 
                 // Tab bar
                 if (ImGui.BeginTabBar("SettingsTabs"))
@@ -79,10 +105,16 @@ namespace StellarSync.UI
                 
                 ImGui.Separator();
                 
+                // Draw the file dialog if it's open
+                _fileDialogManager.Draw();
+                
                 // Save button
                 if (ImGui.Button("Save Settings", new Vector2(120, 30)))
                 {
-                    // TODO: Save configuration
+                    if (_configuration != null)
+                    {
+                        SaveConfiguration(_configuration);
+                    }
                 }
                 
                 ImGui.SameLine();
@@ -128,13 +160,34 @@ namespace StellarSync.UI
             ImGui.Text("Server URL:");
             ImGui.SameLine();
             ImGui.SetNextItemWidth(300);
-            ImGui.InputText("##serverUrl", ref serverUrl, 256);
+            if (ImGui.InputText("##serverUrl", ref serverUrl, 256))
+            {
+                // Auto-save when URL changes
+                if (_configuration != null)
+                {
+                    SaveConfiguration(_configuration);
+                }
+            }
             
             ImGui.Spacing();
-            ImGui.Checkbox("Auto-connect on startup", ref autoConnect);
+            if (ImGui.Checkbox("Auto-connect on startup", ref autoConnect))
+            {
+                // Auto-save when checkbox changes
+                if (_configuration != null)
+                {
+                    SaveConfiguration(_configuration);
+                }
+            }
             
             ImGui.Spacing();
-            ImGui.Checkbox("Enable Test Mode", ref testMode);
+            if (ImGui.Checkbox("Enable Test Mode", ref testMode))
+            {
+                // Auto-save when checkbox changes
+                if (_configuration != null)
+                {
+                    SaveConfiguration(_configuration);
+                }
+            }
             if (testMode)
             {
                 ImGui.SameLine();
@@ -178,13 +231,99 @@ namespace StellarSync.UI
             ImGui.Text("Advanced Settings");
             ImGui.Separator();
             
-            ImGui.Text("Advanced Options:");
+            ImGui.Text("Received Mods Partition:");
+            ImGui.Separator();
+            
+            ImGui.Text("Storage Directory:");
+            ImGui.Spacing();
+            ImGui.SetNextItemWidth(400);
+            if (ImGui.InputText("##receivedModsPath", ref receivedModsPath, 512))
+            {
+                // Auto-save when path changes
+                if (_configuration != null)
+                {
+                    SaveConfiguration(_configuration);
+                }
+            }
+            ImGui.SameLine();
+            if (ImGui.Button("Browse", new Vector2(80, 20)))
+            {
+                OpenFolderDialog();
+            }
+            
+            ImGui.Spacing();
+            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Leave empty to use default location (plugin directory)");
+            
+            ImGui.Spacing();
+            ImGui.Text("Storage Limit:");
+            ImGui.SameLine();
+            ImGui.SetNextItemWidth(100);
+            if (ImGui.InputScalar("##maxSizeGB", ImGuiDataType.S64, ref maxReceivedModsSizeGB, IntPtr.Zero, IntPtr.Zero))
+            {
+                // Auto-save when size changes
+                if (_configuration != null)
+                {
+                    SaveConfiguration(_configuration);
+                }
+            }
+            ImGui.SameLine();
+            ImGui.Text("GB");
+            
+            ImGui.Spacing();
+            if (ImGui.Checkbox("Auto-delete old mods when limit reached", ref autoDeleteOldMods))
+            {
+                // Auto-save when checkbox changes
+                if (_configuration != null)
+                {
+                    SaveConfiguration(_configuration);
+                }
+            }
+            ImGui.SameLine();
+            ImGui.TextColored(new Vector4(1.0f, 1.0f, 0.0f, 1.0f), "(Deletes oldest files first)");
+            
+
+            
+            ImGui.Separator();
+            ImGui.Text("Debug Options:");
             ImGui.Spacing();
             
-            // TODO: Add advanced settings
-            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Advanced settings will be added here.");
+            // TODO: Add debug settings
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Debug options will be added here.");
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Performance settings will be added here.");
+        }
+        
+        private void OpenFolderDialog()
+        {
+            try
+            {
+                // Get initial directory - start with current path if set, otherwise Documents
+                var initialDir = !string.IsNullOrEmpty(receivedModsPath) && Directory.Exists(receivedModsPath) 
+                    ? receivedModsPath 
+                    : Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+                
+                if (string.IsNullOrEmpty(initialDir) || !Directory.Exists(initialDir))
+                {
+                    initialDir = "C:\\";
+                }
+
+                _fileDialogManager.OpenFolderDialog("Pick Received Mods Storage Folder", (success, path) =>
+                {
+                    if (!success) return;
+
+                    receivedModsPath = path;
+                    
+                    // Auto-save when folder is selected
+                    if (_configuration != null)
+                    {
+                        SaveConfiguration(_configuration);
+                    }
+                }, initialDir);
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't show UI error since this is settings
+                System.Diagnostics.Debug.WriteLine($"Error opening folder dialog: {ex.Message}");
+            }
         }
     }
 }

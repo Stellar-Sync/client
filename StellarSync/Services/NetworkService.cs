@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Text;
 using System.Threading;
@@ -106,11 +108,14 @@ namespace StellarSync.Services
 
 	try
 	{
+		// Convert byte arrays to base64 strings for JSON serialization
+		var serializableData = ConvertCharacterDataForSerialization(characterData);
+		
 		var message = new
 		{
 			type = "character_data",
 			client = "stellar_sync",
-			data = characterData
+			data = serializableData
 		};
 
 		var jsonMessage = JsonConvert.SerializeObject(message);
@@ -119,12 +124,82 @@ namespace StellarSync.Services
 		var messageSize = Encoding.UTF8.GetByteCount(jsonMessage);
 		System.Diagnostics.Debug.WriteLine($"Sending character data message, size: {messageSize} bytes");
 		
+		// Debug: Log what's actually being sent
+		System.Diagnostics.Debug.WriteLine($"DEBUG: Message structure - type: {message.type}, client: {message.client}");
+		if (serializableData is Dictionary<string, object> dataDict)
+		{
+			foreach (var kvp in dataDict)
+			{
+				if (kvp.Key == "PenumbraFiles" && kvp.Value is Dictionary<string, string> files)
+				{
+					System.Diagnostics.Debug.WriteLine($"DEBUG: PenumbraFiles count: {files.Count}");
+					foreach (var file in files.Take(3)) // Log first 3 files
+					{
+						System.Diagnostics.Debug.WriteLine($"DEBUG: File {file.Key}: {file.Value.Length} base64 chars");
+					}
+				}
+			}
+		}
+		
 		await SendMessageAsync(jsonMessage);
 	}
 	catch (Exception ex)
 	{
 		ErrorOccurred?.Invoke(this, $"Failed to send character data: {ex.Message}");
 		throw;
+	}
+}
+
+private object ConvertCharacterDataForSerialization(object characterData)
+{
+	try
+	{
+		// Use reflection to convert byte arrays to base64 strings
+		var dataType = characterData.GetType();
+		var properties = dataType.GetProperties();
+		
+		System.Diagnostics.Debug.WriteLine($"DEBUG: Converting {dataType.Name} with {properties.Length} properties");
+		
+		// Create a dictionary to hold the serializable data
+		var serializableData = new Dictionary<string, object>();
+		
+		foreach (var property in properties)
+		{
+			var value = property.GetValue(characterData);
+			System.Diagnostics.Debug.WriteLine($"DEBUG: Property {property.Name}: {value?.GetType().Name ?? "null"}");
+			
+			if (property.Name == "PenumbraFiles" && value is Dictionary<string, byte[]> penumbraFiles)
+			{
+				System.Diagnostics.Debug.WriteLine($"DEBUG: Found PenumbraFiles with {penumbraFiles.Count} entries");
+				// Convert byte arrays to base64 strings
+				var convertedFiles = new Dictionary<string, string>();
+				foreach (var kvp in penumbraFiles)
+				{
+					convertedFiles[kvp.Key] = Convert.ToBase64String(kvp.Value);
+				}
+				serializableData[property.Name] = convertedFiles;
+				System.Diagnostics.Debug.WriteLine($"DEBUG: Converted PenumbraFiles to {convertedFiles.Count} base64 strings");
+			}
+			else if (property.Name == "PenumbraFiles")
+			{
+				System.Diagnostics.Debug.WriteLine($"DEBUG: PenumbraFiles property found but value is {value?.GetType().Name ?? "null"}");
+				// Keep as-is for now
+				serializableData[property.Name] = value;
+			}
+			else
+			{
+				// Keep other properties as-is
+				serializableData[property.Name] = value;
+			}
+		}
+		
+		System.Diagnostics.Debug.WriteLine($"DEBUG: Serialization complete, returning {serializableData.Count} properties");
+		return serializableData;
+	}
+	catch (Exception ex)
+	{
+		System.Diagnostics.Debug.WriteLine($"Error converting character data for serialization: {ex.Message}");
+		return characterData; // Fallback to original data
 	}
 }
 

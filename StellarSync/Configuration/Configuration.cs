@@ -30,6 +30,11 @@ namespace StellarSync.Configuration
         private bool _allowOthersToSeeMe = true;
         private bool _showOthersToMe = true;
 
+        // Received mods partition settings
+        private string _receivedModsPath = "";
+        private long _maxReceivedModsSizeGB = 20; // 20GB default
+        private bool _autoDeleteOldMods = true;
+
         public string ServerUrl { get => _serverUrl; set => _serverUrl = value; }
         public bool AutoConnect { get => _autoConnect; set => _autoConnect = value; }
         public bool TestMode { get => _testMode; set => _testMode = value; }
@@ -42,6 +47,11 @@ namespace StellarSync.Configuration
         public bool EnableEmoteSync { get => _enableEmoteSync; set => _enableEmoteSync = value; }
         public bool AllowOthersToSeeMe { get => _allowOthersToSeeMe; set => _allowOthersToSeeMe = value; }
         public bool ShowOthersToMe { get => _showOthersToMe; set => _showOthersToMe = value; }
+        
+        // Received mods partition properties
+        public string ReceivedModsPath { get => _receivedModsPath; set => _receivedModsPath = value; }
+        public long MaxReceivedModsSizeGB { get => _maxReceivedModsSizeGB; set => _maxReceivedModsSizeGB = value; }
+        public bool AutoDeleteOldMods { get => _autoDeleteOldMods; set => _autoDeleteOldMods = value; }
 
         // IDalamudPluginInterface is not serializable, so we need to not include it
         [NonSerialized]

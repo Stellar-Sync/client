@@ -6,6 +6,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Logging;
 using Dalamud.Plugin.Services;
+using Dalamud.Interface;
 using Newtonsoft.Json;
 using StellarSync.Configuration;
 using StellarSync.Services;
@@ -32,12 +33,14 @@ private List<dynamic> onlineUsers = new List<dynamic>();
 private string selectedUserId = "";
 private string pairResult = "";
         
-        // Services
-private NetworkService? networkService;
-private SettingsUI? settingsUI;
-private ModIntegrationService? modIntegrationService;
-private IPluginLog? pluginLog;
-private IClientState? clientState;
+                // Services
+        private NetworkService? networkService;
+        private SettingsUI? settingsUI;
+        private ModIntegrationService? modIntegrationService;
+        private CharacterSyncService? characterSyncService;
+        private ReceivedModsService? receivedModsService;
+        private IPluginLog? pluginLog;
+        private IClientState? clientState;
 
         public PluginUI() : base("Stellar Sync###StellarSyncMainUI")
         {
@@ -49,6 +52,27 @@ private IClientState? clientState;
             {
                 MinimumSize = new Vector2(400, 300),
                 MaximumSize = new Vector2(800, 600)
+            };
+            
+            // Add title bar buttons like client-old
+            TitleBarButtons = new()
+            {
+                new TitleBarButton()
+                {
+                    Icon = FontAwesomeIcon.Cog,
+                    Click = (msg) =>
+                    {
+                        if (settingsUI != null)
+                            settingsUI.IsOpen = true;
+                    },
+                    IconOffset = new(2, 1),
+                    ShowTooltip = () =>
+                    {
+                        ImGui.BeginTooltip();
+                        ImGui.Text("Open Settings");
+                        ImGui.EndTooltip();
+                    }
+                }
             };
         }
 
@@ -102,10 +126,20 @@ public void SetPluginLog(IPluginLog pluginLog)
 	this.pluginLog = pluginLog;
 }
 
-public void SetClientState(IClientState clientState)
-{
-	this.clientState = clientState;
-}
+        public void SetClientState(IClientState clientState)
+        {
+            this.clientState = clientState;
+        }
+
+        public void SetCharacterSyncService(CharacterSyncService characterSyncService)
+        {
+            this.characterSyncService = characterSyncService;
+        }
+
+        public void SetReceivedModsService(ReceivedModsService receivedModsService)
+        {
+            this.receivedModsService = receivedModsService;
+        }
 
         public void UpdateConnectionStatus(bool connected, string message = "")
         {
@@ -407,7 +441,8 @@ private void HandleUserCharacterData(dynamic data)
 						
 						if (penumbraFiles.Count > 0)
 						{
-							var result = await modIntegrationService.ApplyPenumbraFilesFromTransfer(penumbraFiles);
+							var sourceCharacterName = data.source_character_name?.ToString() ?? "Unknown";
+							var result = await modIntegrationService.ApplyPenumbraFilesFromTransfer(penumbraFiles, sourceCharacterName, receivedModsService);
 							pluginLog?.Information($"Penumbra file transfer result: {result}");
 						}
 					}
@@ -459,15 +494,8 @@ private string GetPlayerCharacterName()
         {
             try
             {
-                // Header with settings button in top right
-                ImGui.Text("Stellar Sync");
-                ImGui.SameLine(ImGui.GetWindowWidth() - 80);
-                if (ImGui.Button("⚙️", new Vector2(30, 20)))
-                {
-                    if (settingsUI != null)
-                        settingsUI.IsOpen = true;
-                }
-                ImGui.Separator();
+                // Title bar buttons are handled automatically by Dalamud
+                // No need for manual header implementation
                 
                 if (!isConnected)
                 {

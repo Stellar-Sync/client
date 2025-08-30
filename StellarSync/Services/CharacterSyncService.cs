@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using StellarSync.Configuration;
@@ -67,9 +68,15 @@ namespace StellarSync.Services
         {
             try
             {
+                SyncError?.Invoke(this, "DEBUG: GetModData method called");
+                
                 // Get player address
                 var playerAddress = _clientState?.LocalPlayer?.Address ?? IntPtr.Zero;
-                if (playerAddress == IntPtr.Zero) return;
+                if (playerAddress == IntPtr.Zero) 
+                {
+                    SyncError?.Invoke(this, "DEBUG: Player address is zero, returning");
+                    return;
+                }
 
                 // Get Glamourer data
                 if (_modIntegrationService.GlamourerAvailable)
@@ -81,8 +88,12 @@ namespace StellarSync.Services
                 // Get Penumbra data
 if (_modIntegrationService.PenumbraAvailable)
 {
+	SyncError?.Invoke(this, "Penumbra is available, getting data...");
+	
 	var penumbraData = await _modIntegrationService.GetPenumbraDataAsync(playerAddress);
 	characterData.PenumbraData = penumbraData;
+	
+	SyncError?.Invoke(this, $"Penumbra data retrieved: {penumbraData.Count} categories");
 	
 	var metaManipulations = _modIntegrationService.GetPenumbraMetaManipulations();
 	characterData.PenumbraMetaManipulations = metaManipulations;
@@ -90,8 +101,32 @@ if (_modIntegrationService.PenumbraAvailable)
 	// Get Penumbra files for transfer
 	if (penumbraData.Count > 0)
 	{
+		SyncError?.Invoke(this, $"Getting Penumbra files for transfer from {penumbraData.Count} categories...");
 		characterData.PenumbraFiles = await _modIntegrationService.GetPenumbraFilesForTransfer(penumbraData);
+		SyncError?.Invoke(this, $"Penumbra files prepared: {characterData.PenumbraFiles.Count} files");
+		
+		// Debug: Log the actual PenumbraFiles dictionary
+		if (characterData.PenumbraFiles != null)
+		{
+			SyncError?.Invoke(this, $"DEBUG: PenumbraFiles dictionary created with {characterData.PenumbraFiles.Count} entries");
+			foreach (var kvp in characterData.PenumbraFiles.Take(3))
+			{
+				SyncError?.Invoke(this, $"DEBUG: File {kvp.Key}: {kvp.Value.Length} bytes");
+			}
+		}
+		else
+		{
+			SyncError?.Invoke(this, "DEBUG: PenumbraFiles is null!");
+		}
 	}
+	else
+	{
+		SyncError?.Invoke(this, "No Penumbra data found, skipping file transfer");
+	}
+}
+else
+{
+	SyncError?.Invoke(this, "Penumbra is not available");
 }
             }
             catch (Exception ex)

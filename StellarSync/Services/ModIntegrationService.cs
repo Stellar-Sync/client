@@ -284,72 +284,72 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
             }
         }
         
-        public async Task<string> ApplyGlamourerData(string glamourerData)
-        {
-            if (!GlamourerAvailable || _glamourerApplyAll == null)
-            {
-                return "Glamourer API not available";
-            }
-            
-            try
-            {
-                _logger.Information("Applying stored Glamourer data to character");
-                
-                // Get object index for player character
-                var objectIndex = GetObjectIndexFromAddress(IntPtr.Zero);
-                if (objectIndex == -1) return "Invalid object index";
-                
-                // Apply the Glamourer data using the correct API
-                // Based on the old code: _glamourerApplyAll!.Invoke(customization, chara.ObjectIndex, LockCode);
-                const uint LockCode = 0x6D617265; // "mare" in hex
-                var result = _glamourerApplyAll.Invoke(glamourerData, (ushort)objectIndex, LockCode);
-                
-                if (result == Glamourer.Api.Enums.GlamourerApiEc.Success)
-                {
-                    _logger.Information("Successfully applied Glamourer data to character");
-                    return "Applied successfully";
-                }
-                else
-                {
-                    _logger.Warning($"Failed to apply Glamourer data: {result}");
-                    return $"Application failed: {result}";
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Failed to apply Glamourer data: {ex.Message}");
-                return $"Error: {ex.Message}";
-            }
-        }
+        public async Task<string> ApplyGlamourerData(string glamourerData, string targetCharacterName = null)
+{
+	if (!GlamourerAvailable || _glamourerApplyAll == null)
+	{
+		return "Glamourer API not available";
+	}
+	
+	try
+	{
+		_logger.Information($"Applying Glamourer data to character: {targetCharacterName ?? "local player"}");
+		
+		// Get object index for target character
+		var objectIndex = GetObjectIndexFromAddress(IntPtr.Zero); // For now, still use local player
+		if (objectIndex == -1) return "Invalid object index";
+		
+		// Apply the Glamourer data using the correct API
+		// Based on the old code: _glamourerApplyAll!.Invoke(customization, chara.ObjectIndex, LockCode);
+		const uint LockCode = 0x6D617265; // "mare" in hex
+		var result = _glamourerApplyAll.Invoke(glamourerData, (ushort)objectIndex, LockCode);
+		
+		if (result == Glamourer.Api.Enums.GlamourerApiEc.Success)
+		{
+			_logger.Information($"Successfully applied Glamourer data to character: {targetCharacterName ?? "local player"}");
+			return "Applied successfully";
+		}
+		else
+		{
+			_logger.Warning($"Failed to apply Glamourer data: {result}");
+			return $"Application failed: {result}";
+		}
+	}
+	catch (Exception ex)
+	{
+		_logger.Error($"Failed to apply Glamourer data: {ex.Message}");
+		return $"Error: {ex.Message}";
+	}
+}
         
-        public async Task<string> ApplyPenumbraMetaData(string metaData)
-        {
-            if (!PenumbraAvailable)
-            {
-                return "Penumbra API not available";
-            }
-            
-            try
-            {
-                _logger.Information("Applying stored Penumbra meta data to character");
-                
-                // For Penumbra meta data, we need to trigger a redraw to apply the changes
-                // The meta data is already applied to the player, we just need to redraw
-                var objectIndex = GetObjectIndexFromAddress(IntPtr.Zero);
-                if (objectIndex == -1) return "Invalid object index";
-                
-                // Trigger a Penumbra redraw to apply meta manipulations
-                _penumbraRedraw.Invoke((ushort)objectIndex, RedrawType.Redraw);
-                
-                _logger.Information("Successfully triggered Penumbra redraw for meta data");
-                return "Redraw triggered successfully";
-            }
-            catch (Exception ex)
-            {
-                _logger.Error($"Failed to apply Penumbra meta data: {ex.Message}");
-                return $"Error: {ex.Message}";
-            }
-        }
+        public async Task<string> ApplyPenumbraMetaData(string metaData, string targetCharacterName = null)
+{
+	if (!PenumbraAvailable)
+	{
+		return "Penumbra API not available";
+	}
+	
+	try
+	{
+		_logger.Information($"Applying Penumbra meta data to character: {targetCharacterName ?? "local player"}");
+		
+		// For Penumbra meta data, we need to trigger a redraw to apply the changes
+		// The meta data is already applied to the player, we just need to redraw
+		var objectIndex = GetObjectIndexFromAddress(IntPtr.Zero); // For now, still use local player
+		if (objectIndex == -1) return "Invalid object index";
+		
+		// Trigger a Penumbra redraw to apply meta manipulations
+		_penumbraRedraw.Invoke((ushort)objectIndex, RedrawType.Redraw);
+		
+		_logger.Information($"Successfully triggered Penumbra redraw for meta data to character: {targetCharacterName ?? "local player"}");
+		return "Redraw triggered successfully";
+	}
+	catch (Exception ex)
+	{
+		_logger.Error($"Failed to apply Penumbra meta data: {ex.Message}");
+		return $"Error: {ex.Message}";
+	}
+}
         
         private async Task<string> ApplyPenumbraFileData(Dictionary<string, HashSet<string>> fileData)
 {
@@ -403,35 +403,34 @@ public async Task<Dictionary<string, byte[]>> GetPenumbraFilesForTransfer(Dictio
 		
 		foreach (var kvp in filePaths)
 		{
-			var category = kvp.Key;
-			var paths = kvp.Value;
+			var fullModPath = kvp.Key; // This is the full path including mod folder
+			var relativePaths = kvp.Value;
 			
-			foreach (var path in paths)
+			foreach (var relativePath in relativePaths)
 			{
 				try
 				{
-					// Construct full file path
-					var fullPath = Path.Combine(modDirectory, path);
-					if (File.Exists(fullPath))
+					// The fullModPath already contains the complete path to the file
+					if (File.Exists(fullModPath))
 					{
 						// Read and compress the file
-						var fileBytes = await File.ReadAllBytesAsync(fullPath);
+						var fileBytes = await File.ReadAllBytesAsync(fullModPath);
 						var compressedBytes = await CompressBytesAsync(fileBytes);
 						
-						// Store with a unique key
-						var fileKey = $"{category}_{path.Replace('/', '_').Replace('\\', '_')}";
+						// Store with a unique key based on the relative path
+						var fileKey = relativePath.Replace('/', '_').Replace('\\', '_');
 						files[fileKey] = compressedBytes;
 						
-						_logger.Information($"Prepared file for transfer: {path} ({fileBytes.Length} -> {compressedBytes.Length} bytes)");
+						_logger.Information($"Prepared file for transfer: {relativePath} ({fileBytes.Length} -> {compressedBytes.Length} bytes)");
 					}
 					else
 					{
-						_logger.Warning($"File not found: {fullPath}");
+						_logger.Warning($"File not found: {fullModPath}");
 					}
 				}
 				catch (Exception ex)
 				{
-					_logger.Error($"Failed to read file {path}: {ex.Message}");
+					_logger.Error($"Failed to read file {relativePath}: {ex.Message}");
 				}
 			}
 		}
@@ -446,7 +445,7 @@ public async Task<Dictionary<string, byte[]>> GetPenumbraFilesForTransfer(Dictio
 	}
 }
 
-public async Task<string> ApplyPenumbraFilesFromTransfer(Dictionary<string, byte[]> compressedFiles)
+public async Task<string> ApplyPenumbraFilesFromTransfer(Dictionary<string, byte[]> compressedFiles, string sourceCharacterName, ReceivedModsService receivedModsService)
 {
 	try
 	{
@@ -455,16 +454,9 @@ public async Task<string> ApplyPenumbraFilesFromTransfer(Dictionary<string, byte
 			return "Penumbra API not available";
 		}
 		
-		// Get Penumbra mod directory
-		var modDirectory = _penumbraGetModDirectory.Invoke();
-		if (string.IsNullOrEmpty(modDirectory))
-		{
-			return "Penumbra mod directory not found";
-		}
+		_logger.Information($"Processing {compressedFiles.Count} Penumbra files from {sourceCharacterName}");
 		
-		_logger.Information($"Applying {compressedFiles.Count} Penumbra files to: {modDirectory}");
-		
-		var appliedCount = 0;
+		var storedCount = 0;
 		var errorCount = 0;
 		
 		foreach (var kvp in compressedFiles)
@@ -477,43 +469,31 @@ public async Task<string> ApplyPenumbraFilesFromTransfer(Dictionary<string, byte
 				// Decompress the file
 				var fileBytes = await DecompressBytesAsync(compressedBytes);
 				
-				// Extract original path from key
-				var originalPath = ExtractPathFromKey(fileKey);
-				var fullPath = Path.Combine(modDirectory, originalPath);
+				// Extract original filename from key
+				var originalFileName = ExtractPathFromKey(fileKey);
 				
-				// Ensure directory exists
-				var directory = Path.GetDirectoryName(fullPath);
-				if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-				{
-					Directory.CreateDirectory(directory);
-				}
+				// Store the file in the received mods partition
+				var storedPath = await receivedModsService.StoreReceivedModAsync(originalFileName, fileBytes, sourceCharacterName);
+				storedCount++;
 				
-				// Write the file
-				await File.WriteAllBytesAsync(fullPath, fileBytes);
-				appliedCount++;
-				
-				_logger.Information($"Applied file: {originalPath}");
+				_logger.Information($"Stored received mod: {originalFileName} from {sourceCharacterName}");
 			}
 			catch (Exception ex)
 			{
-				_logger.Error($"Failed to apply file {kvp.Key}: {ex.Message}");
+				_logger.Error($"Failed to store file {kvp.Key}: {ex.Message}");
 				errorCount++;
 			}
 		}
 		
-		// Trigger Penumbra redraw to apply the new files
-		var objectIndex = GetObjectIndexFromAddress(IntPtr.Zero);
-		if (objectIndex != -1)
-		{
-			_penumbraRedraw.Invoke((ushort)objectIndex, RedrawType.Redraw);
-			_logger.Information("Triggered Penumbra redraw after file application");
-		}
+		// Note: We don't automatically apply the mods to Penumbra anymore
+		// The user will need to manually copy them to their Penumbra directory if desired
+		_logger.Information($"Stored {storedCount} mod files from {sourceCharacterName} in received mods partition");
 		
-		return $"Applied {appliedCount} files successfully, {errorCount} errors";
+		return $"Stored {storedCount} files successfully, {errorCount} errors. Files are in the received mods partition.";
 	}
 	catch (Exception ex)
 	{
-		_logger.Error($"Failed to apply Penumbra files from transfer: {ex.Message}");
+		_logger.Error($"Failed to process Penumbra files from transfer: {ex.Message}");
 		return $"Error: {ex.Message}";
 	}
 }
