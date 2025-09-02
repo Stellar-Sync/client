@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Dalamud.Game.Command;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -108,6 +109,9 @@ this.SettingsUi.SetNetworkService(this.NetworkService);
             
             // Check if setup is needed
             CheckAndShowSetupWizard();
+            
+            // Check if auto-connect is enabled
+            CheckAutoConnect();
             
             ChatGui?.Print("[Stellar Sync] Plugin loaded successfully!");
 
@@ -226,6 +230,66 @@ this.SettingsUi.SetNetworkService(this.NetworkService);
             catch (Exception ex)
             {
                 PluginLog?.Error($"Error checking setup status: {ex.Message}");
+            }
+        }
+        
+        private void CheckAutoConnect()
+        {
+            try
+            {
+                if (Configuration.AutoConnect && !string.IsNullOrEmpty(Configuration.ServerUrl))
+                {
+                    PluginLog?.Information("Auto-connect enabled. Will attempt to connect on next framework update...");
+                    
+                    // Schedule auto-connect for the next framework update to ensure we're on the main thread
+                    // Add a small delay to ensure the game is fully loaded
+                    Framework.RunOnFrameworkThread(() => 
+                    {
+                        // Wait a bit more for the game to be fully loaded
+                        _ = Task.Run(async () =>
+                        {
+                            await Task.Delay(2000); // Wait 2 seconds
+                            Framework.RunOnFrameworkThread(() => PerformAutoConnect());
+                        });
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLog?.Error($"Error scheduling auto-connect: {ex.Message}");
+            }
+        }
+        
+        private void PerformAutoConnect()
+        {
+            try
+            {
+                if (Configuration.AutoConnect && !string.IsNullOrEmpty(Configuration.ServerUrl))
+                {
+                    PluginLog?.Information("Auto-connect enabled. Attempting to connect to server...");
+                    ChatGui?.Print("[Stellar Sync] Auto-connecting to server...");
+                    
+                    // Get the player's character name (now on main thread)
+                    var characterName = ClientState.LocalPlayer?.Name?.ToString() ?? "Unknown";
+                    
+                    // Attempt to connect
+                    _ = Task.Run(async () =>
+                    {
+                        try
+                        {
+                            await NetworkService.ConnectAsync(Configuration.ServerUrl, characterName);
+                            PluginLog?.Information("Auto-connect successful");
+                        }
+                        catch (Exception ex)
+                        {
+                            PluginLog?.Warning($"Auto-connect failed: {ex.Message}");
+                        }
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLog?.Error($"Error during auto-connect: {ex.Message}");
             }
         }
 

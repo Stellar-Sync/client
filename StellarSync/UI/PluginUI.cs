@@ -1203,13 +1203,20 @@ if (!string.IsNullOrEmpty(pairResult))
                         ImGui.SameLine();
                         ImGui.TextColored(glamourerColor, modIntegrationService.GlamourerAvailable ? "Available" : "Not Available");
                         
-                        // Save & Send character data button (combines both operations)
+                                                // Save & Send character data button (combines both operations)
                         if (ImGui.Button("Save & Send Character Data", new Vector2(200, 30)))
                         {
                             SaveAndSendCharacterData();
                         }
                         
-
+                        // Force reconnection button (only show when APIs are unavailable)
+                        if (!modIntegrationService.PenumbraAvailable || !modIntegrationService.GlamourerAvailable)
+                        {
+                            if (ImGui.Button("Force Reconnect APIs", new Vector2(200, 30)))
+                            {
+                                modIntegrationService.ForceReconnection();
+                            }
+                        }
                         
                         // Show save & send result
                         if (!string.IsNullOrEmpty(sendToServerResult))
@@ -1282,4 +1289,5 @@ if (!string.IsNullOrEmpty(pairResult))
         }
     }
 }
+
 

@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using System.Text;
 using System.IO;
 using System.IO.Compression;
+using System.Timers;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Glamourer.Api.Helpers;
@@ -49,6 +50,13 @@ namespace StellarSync.Services
         
         public bool GlamourerAvailable { get; private set; }
         public bool PenumbraAvailable { get; private set; }
+        
+        // Auto-reconnection timer
+        private Timer? _reconnectionTimer;
+        private const int RECONNECTION_INTERVAL_MS = 5000; // Check every 5 seconds
+        private const int MAX_RECONNECTION_ATTEMPTS = 10; // Max attempts before giving up temporarily
+        private int _glamourerReconnectionAttempts = 0;
+        private int _penumbraReconnectionAttempts = 0;
         
         // Stored data for testing
         private string _storedGlamourerData = "";
@@ -235,6 +243,67 @@ namespace StellarSync.Services
         {
             CheckGlamourerAPI();
             CheckPenumbraAPI();
+            StartReconnectionTimer();
+        }
+        
+        public void ForceReconnection()
+        {
+            _logger.Information("Manual reconnection requested by user");
+            _glamourerReconnectionAttempts = 0;
+            _penumbraReconnectionAttempts = 0;
+            CheckAPIs();
+        }
+        
+        private void StartReconnectionTimer()
+        {
+            if (_reconnectionTimer != null)
+            {
+                _reconnectionTimer.Stop();
+                _reconnectionTimer.Dispose();
+            }
+            
+            _reconnectionTimer = new Timer(RECONNECTION_INTERVAL_MS);
+            _reconnectionTimer.Elapsed += OnReconnectionTimerElapsed;
+            _reconnectionTimer.AutoReset = true;
+            _reconnectionTimer.Start();
+            
+            _logger.Information("Auto-reconnection timer started");
+        }
+        
+        private void OnReconnectionTimerElapsed(object? sender, ElapsedEventArgs e)
+        {
+            // Only attempt reconnection if either API is unavailable
+            if (!GlamourerAvailable || !PenumbraAvailable)
+            {
+                _logger.Information("Attempting to reconnect to unavailable APIs...");
+                
+                if (!GlamourerAvailable && _glamourerReconnectionAttempts < MAX_RECONNECTION_ATTEMPTS)
+                {
+                    _glamourerReconnectionAttempts++;
+                    _logger.Information($"Attempting to reconnect to Glamourer (attempt {_glamourerReconnectionAttempts}/{MAX_RECONNECTION_ATTEMPTS})");
+                    CheckGlamourerAPI();
+                }
+                
+                if (!PenumbraAvailable && _penumbraReconnectionAttempts < MAX_RECONNECTION_ATTEMPTS)
+                {
+                    _penumbraReconnectionAttempts++;
+                    _logger.Information($"Attempting to reconnect to Penumbra (attempt {_penumbraReconnectionAttempts}/{MAX_RECONNECTION_ATTEMPTS})");
+                    CheckPenumbraAPI();
+                }
+                
+                // Reset attempt counters if APIs become available
+                if (GlamourerAvailable)
+                {
+                    _glamourerReconnectionAttempts = 0;
+                    _logger.Information("Glamourer API reconnected successfully!");
+                }
+                
+                if (PenumbraAvailable)
+                {
+                    _penumbraReconnectionAttempts = 0;
+                    _logger.Information("Penumbra API reconnected successfully!");
+                }
+            }
         }
         
         private void CheckGlamourerAPI()
@@ -1001,7 +1070,12 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
         
         public void Dispose()
         {
-            // Clean up any resources if needed
+            if (_reconnectionTimer != null)
+            {
+                _reconnectionTimer.Stop();
+                _reconnectionTimer.Dispose();
+                _reconnectionTimer = null;
+            }
         }
     }
 }
