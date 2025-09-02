@@ -50,7 +50,7 @@ namespace StellarSync.UI
         private string penumbraData = "";
         private string penumbraMetaData = "";
         private bool showModData = false;
-        private string applyTestResult = "";
+
 private string sendToServerResult = "";
 private List<dynamic> onlineUsers = new List<dynamic>();
         private string selectedUserId = "";
@@ -415,6 +415,47 @@ public void SetPluginLog(IPluginLog pluginLog)
             UpdateTestInfo("Test: Character data synced");
         }
 
+        private async void SaveAndSendCharacterData()
+        {
+            if (modIntegrationService == null) return;
+            
+            try
+            {
+                UpdateTestInfo("Collecting and sending character data...");
+                
+                // Step 1: Collect character data
+                var characterData = await modIntegrationService.GetGlamourerDataAsync(IntPtr.Zero);
+                var penumbraData = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
+                var metaManipulations = modIntegrationService.GetPenumbraMetaManipulations();
+                
+                // Store the data for display
+                this.glamourerData = characterData;
+                this.penumbraData = penumbraData.Count > 0 ? $"Files: {penumbraData.Count}" : "No files";
+                this.penumbraMetaData = metaManipulations;
+                this.showModData = true;
+                
+                // Store data for testing
+                modIntegrationService.StoreDataForTesting(characterData, metaManipulations, penumbraData);
+                
+                // Step 2: Send to server (if connected)
+                if (networkService != null && networkService.IsConnected)
+                {
+                    SendCharacterDataToServer();
+                }
+                else
+                {
+                    sendToServerResult = "Data collected successfully, but not connected to server";
+                    UpdateTestInfo("Data collected successfully, but not connected to server");
+                }
+            }
+            catch (Exception ex)
+            {
+                var errorMessage = $"Error saving and sending character data: {ex.Message}";
+                sendToServerResult = errorMessage;
+                UpdateTestInfo(errorMessage);
+            }
+        }
+
         private async void TestCharacterData()
         {
             if (modIntegrationService == null) return;
@@ -450,153 +491,139 @@ public void SetPluginLog(IPluginLog pluginLog)
             }
         }
         
-        private async void ApplyStoredData()
+
+
+        private async void SendCharacterDataToServer()
         {
-            if (modIntegrationService == null) return;
+            if (networkService == null || modIntegrationService == null) return;
             
             try
             {
-                UpdateTestInfo("Applying stored data to character...");
-                applyTestResult = await modIntegrationService.ApplyStoredDataToCharacter();
-                UpdateTestInfo($"Apply result: {applyTestResult}");
+                UpdateTestInfo("Sending character data to server...");
+                
+                // Get the current character name
+                var characterName = GetPlayerCharacterName();
+                
+                // Get Penumbra file metadata for transfer (upload via HTTP, not WebSocket)
+                Dictionary<string, object> penumbraFileMetadata = null;
+                try
+                {
+                    var penumbraDataDict = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
+                    if (penumbraDataDict.Count > 0)
+                    {
+                        penumbraFileMetadata = await modIntegrationService.GetPenumbraFileMetadataForTransfer(penumbraDataDict);
+                        pluginLog?.Information($"DEBUG: Prepared metadata for {penumbraFileMetadata?.Count ?? 0} Penumbra files");
+                        
+                        // Upload file metadata via HTTP (not WebSocket)
+                        if (penumbraFileMetadata != null && penumbraFileMetadata.Count > 0)
+                        {
+                            var userId = GetPlayerUserId(); // Get current user ID
+                            if (!string.IsNullOrEmpty(userId))
+                            {
+                                var uploadSuccess = await modIntegrationService.UploadFileMetadataAsync(userId, penumbraFileMetadata);
+                                if (uploadSuccess)
+                                {
+                                    pluginLog?.Information($"Successfully uploaded file metadata via HTTP for {penumbraFileMetadata.Count} files");
+                                }
+                                else
+                                {
+                                    pluginLog?.Warning($"Failed to upload file metadata via HTTP");
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception fileEx)
+                {
+                    pluginLog?.Warning($"Failed to prepare Penumbra file metadata for transfer: {fileEx.Message}");
+                }
+                
+                // Create character data object (core data only - file metadata sent via HTTP)
+                var characterData = new
+                {
+                    character_name = characterName,
+                    glamourer_data = glamourerData,
+                    penumbra_meta = penumbraMetaData,
+                    // penumbra_file_metadata = penumbraFileMetadata, // File metadata sent via HTTP endpoint
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                };
+
+                await networkService.SendCharacterDataAsync(characterData);
+                sendToServerResult = "Character data sent successfully!";
+                UpdateTestInfo("Character data sent successfully!");
             }
             catch (Exception ex)
             {
-                UpdateTestInfo($"Error applying stored data: {ex.Message}");
+                var errorMessage = $"Error sending data: {ex.Message}";
+                if (ex.InnerException != null)
+                {
+                    errorMessage += $" (Inner: {ex.InnerException.Message})";
+                }
+                sendToServerResult = errorMessage;
+                UpdateTestInfo(errorMessage);
             }
         }
 
-        private async void SendCharacterDataToServer()
-{
-	if (networkService == null || modIntegrationService == null) return;
-	
-	try
-	{
-		UpdateTestInfo("Sending character data to server...");
-		
-		// Get the current character name
-		var characterName = GetPlayerCharacterName();
-		
-		// Get Penumbra file metadata for transfer (upload via HTTP, not WebSocket)
-		Dictionary<string, object> penumbraFileMetadata = null;
-		try
-		{
-			var penumbraDataDict = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
-			if (penumbraDataDict.Count > 0)
-			{
-				penumbraFileMetadata = await modIntegrationService.GetPenumbraFileMetadataForTransfer(penumbraDataDict);
-				pluginLog?.Information($"DEBUG: Prepared metadata for {penumbraFileMetadata?.Count ?? 0} Penumbra files");
-				
-				// Upload file metadata via HTTP (not WebSocket)
-				if (penumbraFileMetadata != null && penumbraFileMetadata.Count > 0)
-				{
-					var userId = GetPlayerUserId(); // Get current user ID
-					if (!string.IsNullOrEmpty(userId))
-					{
-						var uploadSuccess = await modIntegrationService.UploadFileMetadataAsync(userId, penumbraFileMetadata);
-						if (uploadSuccess)
-						{
-							pluginLog?.Information($"Successfully uploaded file metadata via HTTP for {penumbraFileMetadata.Count} files");
-						}
-						else
-						{
-							pluginLog?.Warning($"Failed to upload file metadata via HTTP");
-						}
-					}
-				}
-			}
-		}
-		catch (Exception fileEx)
-		{
-			pluginLog?.Warning($"Failed to prepare Penumbra file metadata for transfer: {fileEx.Message}");
-		}
-		
-		// Create character data object (core data only - file metadata sent via HTTP)
-		var characterData = new
-		{
-			character_name = characterName,
-			glamourer_data = glamourerData,
-			penumbra_meta = penumbraMetaData,
-			// penumbra_file_metadata = penumbraFileMetadata, // File metadata sent via HTTP endpoint
-			timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
-		};
+        private async void RequestUserData(string userId)
+        {
+            if (networkService == null || !networkService.IsConnected) return;
+            
+            try
+            {
+                // Get user name for progress tracking
+                var userName = "Unknown";
+                foreach (var user in onlineUsers)
+                {
+                    if (user?.id?.ToString() == userId)
+                    {
+                        userName = user?.name?.ToString() ?? "Unknown";
+                        break;
+                    }
+                }
+                
+                // Start sync progress
+                StartSyncProgress(userId, userName);
+                UpdateSyncProgress(userId, "Requesting data...", 0.1f);
+                
+                await networkService.RequestUserDataAsync(userId);
+                pairResult = $"Requesting data from user {userId}...";
+            }
+            catch (Exception ex)
+            {
+                pairResult = $"Error: {ex.Message}";
+                pluginLog?.Error($"Failed to request user data: {ex.Message}");
+                FailSyncProgress(userId, ex.Message);
+            }
+        }
 
-		await networkService.SendCharacterDataAsync(characterData);
-		sendToServerResult = "Character data sent successfully!";
-		UpdateTestInfo("Character data sent successfully!");
-	}
-	catch (Exception ex)
-	{
-		var errorMessage = $"Error sending data: {ex.Message}";
-		if (ex.InnerException != null)
-		{
-			errorMessage += $" (Inner: {ex.InnerException.Message})";
-		}
-		sendToServerResult = errorMessage;
-		UpdateTestInfo(errorMessage);
-	}
-}
-
-private async void RequestUserData(string userId)
-{
-	if (networkService == null || !networkService.IsConnected) return;
-	
-	try
-	{
-		// Get user name for progress tracking
-		var userName = "Unknown";
-		foreach (var user in onlineUsers)
-		{
-			if (user?.id?.ToString() == userId)
-			{
-				userName = user?.name?.ToString() ?? "Unknown";
-				break;
-			}
-		}
-		
-		// Start sync progress
-		StartSyncProgress(userId, userName);
-		UpdateSyncProgress(userId, "Requesting data...", 0.1f);
-		
-		await networkService.RequestUserDataAsync(userId);
-		pairResult = $"Requesting data from user {userId}...";
-	}
-	catch (Exception ex)
-	{
-		pairResult = $"Error: {ex.Message}";
-		pluginLog?.Error($"Failed to request user data: {ex.Message}");
-		FailSyncProgress(userId, ex.Message);
-	}
-}
-
-private void HandleServerMessage(string message)
-{
-	try
-	{
-		var messageObj = JsonConvert.DeserializeObject<dynamic>(message);
-		var messageType = messageObj?.type?.ToString();
-		
-		switch (messageType)
-		{
-			case "users_list":
-				HandleUsersList(messageObj?.data);
-				break;
-			case "user_character_data":
-				HandleUserCharacterData(messageObj?.data);
-				break;
-			case "character_data_received":
-				sendToServerResult = "Character data received by server!";
-				break;
-			case "connected":
-	pluginLog?.Information("Connected to server successfully");
-	break;
-		}
-	}
-	catch (Exception ex)
-{
-	pluginLog?.Error($"Failed to handle server message: {ex.Message}");
-}
-}
+        private void HandleServerMessage(string message)
+        {
+            try
+            {
+                var messageObj = JsonConvert.DeserializeObject<dynamic>(message);
+                var messageType = messageObj?.type?.ToString();
+                
+                switch (messageType)
+                {
+                    case "users_list":
+                        HandleUsersList(messageObj?.data);
+                        break;
+                    case "user_character_data":
+                        HandleUserCharacterData(messageObj?.data);
+                        break;
+                    case "character_data_received":
+                        sendToServerResult = "Character data received by server!";
+                        break;
+                    case "connected":
+                        pluginLog?.Information("Connected to server successfully");
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Failed to handle server message: {ex.Message}");
+            }
+        }
 
 private void HandleUsersList(dynamic usersData)
 {
@@ -1088,8 +1115,8 @@ private string GetPlayerCharacterName()
                     ImGui.Separator();
                     
                     // Online Users section
-ImGui.Text("Online Users:");
-ImGui.Separator();
+                    ImGui.Text("Other Online Users:");
+                    ImGui.Separator();
 
 if (onlineUsers.Count > 0)
 {
@@ -1097,6 +1124,12 @@ if (onlineUsers.Count > 0)
 	{
 		var userName = user?.name?.ToString() ?? "Unknown";
 		var userId = user?.id?.ToString() ?? "";
+		
+		// Skip the current user - don't show pair button for yourself
+		if (userId == GetPlayerUserId())
+		{
+			continue;
+		}
 		
 		// Check if this user has active sync progress
 		var hasProgress = userSyncProgress.ContainsKey(userId);
@@ -1170,39 +1203,18 @@ if (!string.IsNullOrEmpty(pairResult))
                         ImGui.SameLine();
                         ImGui.TextColored(glamourerColor, modIntegrationService.GlamourerAvailable ? "Available" : "Not Available");
                         
-                        // Save character data button
-                        if (ImGui.Button("Save Character Data", new Vector2(200, 30)))
+                        // Save & Send character data button (combines both operations)
+                        if (ImGui.Button("Save & Send Character Data", new Vector2(200, 30)))
                         {
-                            TestCharacterData();
+                            SaveAndSendCharacterData();
                         }
                         
-                        // Apply stored data button
-                        if (ImGui.Button("Apply Stored Data", new Vector2(200, 30)))
-                        {
-                            ApplyStoredData();
-                        }
+
                         
-                        // Send to server button (only show when connected and have data)
-                        if (networkService != null && networkService.IsConnected && showModData)
-                        {
-                            if (ImGui.Button("Send to Server", new Vector2(200, 30)))
-                            {
-                                SendCharacterDataToServer();
-                            }
-                        }
-                        
-                        // Show apply result
-                        if (!string.IsNullOrEmpty(applyTestResult))
-                        {
-                            ImGui.Text("Apply Result:");
-                            ImGui.SameLine();
-                            ImGui.TextColored(new Vector4(0.0f, 1.0f, 0.0f, 1.0f), applyTestResult);
-                        }
-                        
-                        // Show send to server result
+                        // Show save & send result
                         if (!string.IsNullOrEmpty(sendToServerResult))
                         {
-                            ImGui.Text("Send Result:");
+                            ImGui.Text("Save & Send Result:");
                             ImGui.SameLine();
                             ImGui.TextColored(new Vector4(0.0f, 1.0f, 0.0f, 1.0f), sendToServerResult);
                         }
