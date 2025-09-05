@@ -8,12 +8,15 @@ using System.IO.Compression;
 using System.Timers;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using Dalamud.Game.ClientState.Objects;
+using Dalamud.Game.ClientState.Objects.Types;
 using Glamourer.Api.Helpers;
 using Glamourer.Api.IpcSubscribers;
 using Penumbra.Api.Helpers;
 using Penumbra.Api.IpcSubscribers;
-using Penumbra.Api.IpcSubscribers.Legacy;
+// Removed Legacy import to use modern V6 API
 using Penumbra.Api.Enums;
+using StellarSync.Interop;
 
 namespace StellarSync.Services
 {
@@ -47,6 +50,9 @@ namespace StellarSync.Services
         // Penumbra Collection API for fallback
         private readonly Penumbra.Api.IpcSubscribers.SetCollectionForObject _penumbraSetCollectionForObject;
         private readonly Penumbra.Api.IpcSubscribers.GetCollections _penumbraGetCollections;
+        
+        // New IPC Manager for cleaner mod integration
+        private readonly ModIntegrationManager _ipcManager;
         
         public bool GlamourerAvailable { get; private set; }
         public bool PenumbraAvailable { get; private set; }
@@ -129,17 +135,20 @@ namespace StellarSync.Services
             _penumbraGetMetaManipulations = new GetPlayerMetaManipulations(pluginInterface);
             _penumbraRedraw = new Penumbra.Api.IpcSubscribers.RedrawObject(pluginInterface);
             
-            // Initialize Penumbra Temporary Mod API (like client-old) - Using V5/V6 API
-            _penumbraAddTemporaryMod = new Penumbra.Api.IpcSubscribers.AddTemporaryMod(pluginInterface);
-            _penumbraAddTemporaryModAll = new Penumbra.Api.IpcSubscribers.AddTemporaryModAll(pluginInterface);
-            _penumbraRemoveTemporaryMod = new Penumbra.Api.IpcSubscribers.RemoveTemporaryMod(pluginInterface);
-            _penumbraCreateTemporaryCollection = new Penumbra.Api.IpcSubscribers.CreateTemporaryCollection(pluginInterface);
-            _penumbraDeleteTemporaryCollection = new Penumbra.Api.IpcSubscribers.DeleteTemporaryCollection(pluginInterface);
-            _penumbraAssignTemporaryCollection = new Penumbra.Api.IpcSubscribers.AssignTemporaryCollection(pluginInterface);
+                    // Initialize Penumbra Temporary Mod API (like client-old) - Using V5/V6 API
+        _penumbraAddTemporaryMod = new Penumbra.Api.IpcSubscribers.AddTemporaryMod(pluginInterface);
+        _penumbraAddTemporaryModAll = new Penumbra.Api.IpcSubscribers.AddTemporaryModAll(pluginInterface);
+        _penumbraRemoveTemporaryMod = new Penumbra.Api.IpcSubscribers.RemoveTemporaryMod(pluginInterface);
+        _penumbraCreateTemporaryCollection = new Penumbra.Api.IpcSubscribers.CreateTemporaryCollection(pluginInterface);
+        _penumbraDeleteTemporaryCollection = new Penumbra.Api.IpcSubscribers.DeleteTemporaryCollection(pluginInterface);
+        _penumbraAssignTemporaryCollection = new Penumbra.Api.IpcSubscribers.AssignTemporaryCollection(pluginInterface);
             
             // Initialize Penumbra Collection API for fallback
             _penumbraSetCollectionForObject = new Penumbra.Api.IpcSubscribers.SetCollectionForObject(pluginInterface);
             _penumbraGetCollections = new Penumbra.Api.IpcSubscribers.GetCollections(pluginInterface);
+            
+            // Initialize the new IPC Manager
+            _ipcManager = new ModIntegrationManager(logger, pluginInterface);
             
             CheckAPIs();
         }
@@ -241,8 +250,12 @@ namespace StellarSync.Services
         
         public void CheckAPIs()
         {
-            CheckGlamourerAPI();
-            CheckPenumbraAPI();
+            // Use the new IPC manager for availability checks
+            GlamourerAvailable = _ipcManager.GlamourerAvailable;
+            PenumbraAvailable = _ipcManager.PenumbraAvailable;
+            
+            _logger.Information($"Mod availability - Glamourer: {GlamourerAvailable}, Penumbra: {PenumbraAvailable}");
+            
             StartReconnectionTimer();
         }
         
@@ -971,13 +984,13 @@ private string ExtractPathFromKey(string fileKey)
 	return fileKey;
 }
 
-// Apply downloaded files to Penumbra using temporary mods (like client-old)
-public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedModsPath)
+// Apply downloaded files to Penumbra using temporary collections for a specific character
+public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedModsPath, string targetCharacterName)
 {
 	try
 	{
 		if (!PenumbraAvailable) { return "Penumbra API not available"; }
-		_logger.Information($"Applying downloaded files using Penumbra temporary mods: {receivedModsPath}");
+		_logger.Information($"Applying downloaded files using Penumbra temporary collection for character: {targetCharacterName}");
 		
 		if (!Directory.Exists(receivedModsPath)) { 
 			_logger.Warning($"Received mods directory does not exist: {receivedModsPath}"); 
@@ -991,10 +1004,60 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 			return "No downloaded files found in received mods directory"; 
 		}
 		
-		// Try using AddTemporaryModAll (simpler approach)
+		// Step 1: Create temporary collection for the target character
+		var collectionIdentity = $"StellarSync_{targetCharacterName}";
+		var collectionName = $"StellarSync_{targetCharacterName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+		
+		_logger.Information($"Creating temporary collection: {collectionName} for character: {targetCharacterName}");
+		
+		Guid collectionId = Guid.Empty;
+		var createResult = await RunOnFrameworkThreadAsync(() => 
+			_ipcManager.Penumbra.CreateTemporaryCollection(collectionIdentity, collectionName, out collectionId));
+		
+		if (createResult != PenumbraApiEc.Success)
+		{
+			_logger.Error($"Failed to create temporary collection: {createResult}");
+			return $"Failed to create temporary collection: {createResult}";
+		}
+		
+		_logger.Information($"Successfully created temporary collection with ID: {collectionId}");
+		
+		// Step 2: Find the target character in the game world and get their object index
+		var targetAddress = await GetCharacterAddressByNameAsync(targetCharacterName);
+		if (targetAddress == IntPtr.Zero)
+		{
+			// Clean up the collection we created
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+			return $"Target character '{targetCharacterName}' not found in the game world. Please ensure they are nearby or visible.";
+		}
+		
+		var targetObjectIndex = await GetObjectIndexFromAddressAsync(targetAddress);
+		if (targetObjectIndex == -1)
+		{
+			// Clean up the collection we created
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+			return $"Could not get object index for character '{targetCharacterName}'";
+		}
+		
+		_logger.Information($"Found target character '{targetCharacterName}' with object index: {targetObjectIndex}");
+		
+		// Step 3: Assign the temporary collection to the target character
+		var assignResult = await RunOnFrameworkThreadAsync(() => 
+			_ipcManager.Penumbra.AssignTemporaryCollection(collectionId, targetObjectIndex, true));
+		
+		if (assignResult != PenumbraApiEc.Success)
+		{
+			// Clean up the collection we created
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+			return $"Failed to assign temporary collection to character '{targetCharacterName}': {assignResult}";
+		}
+		
+		_logger.Information($"Successfully assigned temporary collection {collectionId} to character '{targetCharacterName}' (index: {targetObjectIndex})");
+		
+		// Step 4: Apply the mod files to the temporary collection
 		try
 		{
-			// Build mod paths dictionary (game path -> file path) like client-old
+			// Build mod paths dictionary (game path -> file path)
 			var modPaths = new Dictionary<string, string>();
 			var processedCount = 0;
 			
@@ -1004,7 +1067,7 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 				{
 					var relativePath = Path.GetRelativePath(receivedModsPath, filePath);
 					
-					// Convert relative path to game path format (like client-old)
+					// Convert relative path to game path format
 					var gamePath = relativePath.Replace('\\', '/');
 					
 					// Add to mod paths
@@ -1022,43 +1085,41 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 			if (modPaths.Count == 0)
 			{
 				_logger.Warning("No valid mod paths found");
+				// Clean up the collection we created
+				await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
 				return "No valid mod paths found";
 			}
 			
-			// Try using AddTemporaryModAll (simpler approach)
+			// Apply the mod files to the temporary collection
 			var modResult = await RunOnFrameworkThreadAsync(() => 
-				_penumbraAddTemporaryModAll.Invoke("StellarSync_Files", modPaths, string.Empty, 0));
+				_penumbraAddTemporaryModAll.Invoke(collectionName, modPaths, string.Empty, 0));
 			
 			if (modResult != PenumbraApiEc.Success)
 			{
-				_logger.Error($"Failed to apply Penumbra temporary mods: {modResult}");
-				return $"Failed to apply Penumbra temporary mods: {modResult}";
+				_logger.Error($"Failed to apply mod files to temporary collection: {modResult}");
+				// Clean up the collection we created
+				await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+				return $"Failed to apply mod files to temporary collection: {modResult}";
 			}
 			
-			_logger.Information($"Successfully applied {modPaths.Count} files as Penumbra temporary mods");
+			_logger.Information($"Successfully applied {modPaths.Count} files to temporary collection");
 			
-			// Now trigger a redraw to apply all changes (like client-old)
-			if (_clientState?.LocalPlayer != null)
-			{
-				var localPlayerIndex = _clientState.LocalPlayer.ObjectIndex;
-				_logger.Information($"Triggering Penumbra redraw for local player (index: {localPlayerIndex}) to apply all mods");
-				
-				await RunOnFrameworkThreadAsync(() => 
-					_penumbraRedraw.Invoke((ushort)localPlayerIndex, RedrawType.Redraw));
-				
-				_logger.Information($"Successfully triggered Penumbra redraw after applying {modPaths.Count} mod files");
-			}
-			else
-			{
-				_logger.Warning("Local player not available for redraw");
-			}
+			// Step 5: Trigger a redraw to apply all changes to the target character
+			_logger.Information($"Triggering Penumbra redraw for character '{targetCharacterName}' (index: {targetObjectIndex}) to apply all mods");
 			
-			return $"Successfully applied {modPaths.Count} files as Penumbra temporary mods and triggered redraw. The mods should now be visible on your character.";
+			await RunOnFrameworkThreadAsync(() => 
+				_penumbraRedraw.Invoke((ushort)targetObjectIndex, RedrawType.Redraw));
+			
+			_logger.Information($"Successfully triggered Penumbra redraw for character '{targetCharacterName}' after applying {modPaths.Count} mod files");
+			
+			return $"Successfully applied {modPaths.Count} files to character '{targetCharacterName}' using temporary collection. The mods should now be visible on the target character.";
 		}
 		catch (Exception ex) 
 		{ 
-			_logger.Error($"Failed to apply downloaded files to Penumbra: {ex.Message}"); 
-			return $"Error: {ex.Message}"; 
+			_logger.Error($"Failed to apply mod files to temporary collection: {ex.Message}");
+			// Clean up the collection we created
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+			return $"Error applying mod files: {ex.Message}"; 
 		}
 	}
 	catch (Exception ex) 
@@ -1067,6 +1128,173 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 		return $"Error: {ex.Message}"; 
 	}
 }
+
+/// <summary>
+/// Finds a character in the game world by name
+/// </summary>
+private dynamic? FindCharacterByName(string characterName)
+{
+	try
+	{
+		if (_clientState?.LocalPlayer == null)
+		{
+			_logger.Warning("Client state not available for character lookup");
+			return null;
+		}
+
+		// First check if it's the local player
+		if (_clientState.LocalPlayer.Name.TextValue.Equals(characterName, StringComparison.OrdinalIgnoreCase))
+		{
+			_logger.Information($"Target character '{characterName}' is the local player");
+			return _clientState.LocalPlayer;
+		}
+
+		// Look through object table to find the target character (like existing code)
+		if (_objectTable != null)
+		{
+			for (int i = 0; i < 200; i += 2)
+			{
+				var obj = _objectTable[i];
+				if (obj == null || obj.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+					continue;
+				
+				var name = obj.Name.ToString();
+				if (name.Equals(characterName, StringComparison.OrdinalIgnoreCase))
+				{
+					_logger.Information($"Found target character '{characterName}' with object index: {obj.ObjectIndex}");
+					return obj;
+				}
+			}
+		}
+
+		_logger.Warning($"Character '{characterName}' not found in the game world");
+		return null;
+	}
+	catch (Exception ex)
+	{
+		_logger.Error($"Error finding character '{characterName}': {ex.Message}");
+		return null;
+	}
+}
+        
+        /// <summary>
+        /// Tests basic Penumbra connectivity
+        /// </summary>
+        public async Task<string> TestPenumbraConnectivityAsync()
+        {
+            try
+            {
+                if (!PenumbraAvailable)
+                {
+                    return "Penumbra API not available. Please ensure Penumbra is installed and enabled.";
+                }
+
+                return await _ipcManager.Penumbra.TestConnectivityAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error during Penumbra connectivity test: {ex.Message}");
+                return $"Error during test: {ex.Message}";
+            }
+        }
+        
+        /// <summary>
+        /// Test method for experimenting with Penumbra temporary collections
+        /// This is safe to use as it doesn't interfere with the main plugin functionality
+        /// </summary>
+        /// <returns>Result message of the test operation</returns>
+        public async Task<string> TestTemporaryCollectionAsync()
+        {
+            if (!PenumbraAvailable)
+            {
+                return "Penumbra API not available";
+            }
+            
+            try
+            {
+                _logger.Information("Testing Penumbra temporary collection functionality...");
+                
+                // Test basic connectivity first
+                var connectivityResult = await _ipcManager.Penumbra.TestConnectivityAsync();
+                _logger.Information($"Connectivity test result: {connectivityResult}");
+                
+                // Now test temporary collection creation (like LopClient does)
+                var testIdentity = "StellarSync_Test";
+                var testName = "Stellar Sync Test Collection";
+                
+                Guid collectionId = Guid.Empty;
+                var createResult = await RunOnFrameworkThreadAsync(() => 
+                    _ipcManager.Penumbra.CreateTemporaryCollection(testIdentity, testName, out collectionId));
+                
+                if (createResult != PenumbraApiEc.Success)
+                {
+                    return $"Failed to create temporary collection: {createResult}\n\nConnectivity test result: {connectivityResult}";
+                }
+                
+                _logger.Information($"Successfully created temporary collection with ID: {collectionId}");
+                
+                // Get local player object index for assignment
+                var localPlayerIndex = _clientState?.LocalPlayer?.ObjectIndex ?? -1;
+                if (localPlayerIndex == -1)
+                {
+                    // Clean up the collection we created
+                    await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+                    return "Local player not available for testing";
+                }
+                
+                // Assign the temporary collection to the local player
+                var assignResult = await RunOnFrameworkThreadAsync(() => 
+                    _ipcManager.Penumbra.AssignTemporaryCollection(collectionId, localPlayerIndex, true));
+                
+                if (assignResult != PenumbraApiEc.Success)
+                {
+                    // Clean up the collection we created
+                    await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+                    return $"Failed to assign temporary collection: {assignResult}";
+                }
+                
+                _logger.Information($"Successfully assigned temporary collection {collectionId} to local player (index: {localPlayerIndex})");
+                
+                // Wait a moment to let the assignment take effect
+                await Task.Delay(1000);
+                
+                // Remove the temporary collection to clean up
+                var deleteResult = await RunOnFrameworkThreadAsync(() => 
+                    _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+                
+                if (deleteResult != PenumbraApiEc.Success)
+                {
+                    _logger.Warning($"Failed to clean up temporary collection: {deleteResult}");
+                    return $"Test completed but cleanup failed: {deleteResult}. Collection ID: {collectionId}";
+                }
+                
+                _logger.Information("Successfully cleaned up temporary collection after testing");
+                return $"Temporary collection test completed successfully! Created, assigned, and cleaned up a test collection.\n\nConnectivity test result: {connectivityResult}";
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error during temporary collection test: {ex.Message}");
+                return $"Error during test: {ex.Message}";
+            }
+        }
+        
+        /// <summary>
+        /// Test connectivity to all available mods
+        /// </summary>
+        /// <returns>Result message of the test operation</returns>
+        public async Task<string> TestAllModsConnectivityAsync()
+        {
+            try
+            {
+                _logger.Information("Testing connectivity to all available mods...");
+                return await _ipcManager.TestAllModsConnectivityAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error during all mods connectivity test: {ex.Message}");
+                return $"Error during test: {ex.Message}";
+            }
+        }
         
         public void Dispose()
         {
@@ -1076,6 +1304,8 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
                 _reconnectionTimer.Dispose();
                 _reconnectionTimer = null;
             }
+            
+            _ipcManager?.Dispose();
         }
     }
 }

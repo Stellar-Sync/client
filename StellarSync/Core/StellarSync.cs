@@ -84,7 +84,10 @@ this.PluginUi.SetCharacterSyncService(this.CharacterSyncService);
 this.PluginUi.SetReceivedModsService(this.ReceivedModsService);
 this.PluginUi.SetPluginLog(this.PluginLog);
 this.PluginUi.SetClientState(this.ClientState);
-this.SettingsUi.SetNetworkService(this.NetworkService);
+this.PluginUi.SetFramework(this.Framework);
+            this.SettingsUi.SetNetworkService(this.NetworkService);
+            this.SettingsUi.SetModIntegrationService(this.ModIntegrationService);
+            this.SettingsUi.SetMainUI(this.PluginUi);
             
             // Load configuration into UI
             this.SettingsUi.LoadConfiguration(this.Configuration);
@@ -163,9 +166,6 @@ this.SettingsUi.SetNetworkService(this.NetworkService);
         {
             try
             {
-                PluginLog?.Information($"Stellar Sync command executed with args: {args}");
-                ChatGui?.Print($"[Stellar Sync] Command executed! Args: {args}");
-                
                 // Check if setup is required first
                 if (string.IsNullOrEmpty(Configuration.ReceivedModsPath))
                 {
@@ -269,16 +269,21 @@ this.SettingsUi.SetNetworkService(this.NetworkService);
                     PluginLog?.Information("Auto-connect enabled. Attempting to connect to server...");
                     ChatGui?.Print("[Stellar Sync] Auto-connecting to server...");
                     
-                    // Get the player's character name (now on main thread)
-                    var characterName = ClientState.LocalPlayer?.Name?.ToString() ?? "Unknown";
+                    // Get the player's character name and zone (now on main thread)
+                    var characterName = GetPlayerCharacterName();
+                    var currentZone = GetCurrentZone();
                     
                     // Attempt to connect
                     _ = Task.Run(async () =>
                     {
                         try
                         {
-                            await NetworkService.ConnectAsync(Configuration.ServerUrl, characterName);
+                            await NetworkService.ConnectAsync(Configuration.ServerUrl, characterName, currentZone);
                             PluginLog?.Information("Auto-connect successful");
+                            
+                            // Send name update after connection if we got a better name
+                            await Task.Delay(2000); // Wait for connection to stabilize
+                            await SendNameUpdateIfNeeded();
                         }
                         catch (Exception ex)
                         {
@@ -290,6 +295,71 @@ this.SettingsUi.SetNetworkService(this.NetworkService);
             catch (Exception ex)
             {
                 PluginLog?.Error($"Error during auto-connect: {ex.Message}");
+            }
+        }
+
+        private string GetPlayerCharacterName()
+        {
+            try
+            {
+                if (ClientState?.LocalPlayer != null)
+                {
+                    var player = ClientState.LocalPlayer;
+                    return player.Name.ToString() ?? "Unknown";
+                }
+                else if (ClientState?.LocalContentId != 0)
+                {
+                    // Fallback if player object isn't available but we have a content ID
+                    return $"Player_{ClientState.LocalContentId:X}";
+                }
+                else
+                {
+                    // Final fallback
+                    return $"Player_{DateTime.Now:HHmmss}";
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLog?.Error($"Error getting player character name: {ex.Message}");
+                return "Unknown";
+            }
+        }
+
+        private string GetCurrentZone()
+        {
+            try
+            {
+                if (ClientState?.TerritoryType != null)
+                {
+                    return ClientState.TerritoryType.ToString();
+                }
+                return "Unknown";
+            }
+            catch (Exception ex)
+            {
+                PluginLog?.Error($"Error getting current zone: {ex.Message}");
+                return "Unknown";
+            }
+        }
+
+        private async Task SendNameUpdateIfNeeded()
+        {
+            try
+            {
+                if (NetworkService?.IsConnected == true)
+                {
+                    var currentName = GetPlayerCharacterName();
+                    if (currentName != "Unknown" && currentName != $"Player_{DateTime.Now:HHmmss}")
+                    {
+                        // Send name update to server
+                        await NetworkService.SendNameUpdateAsync(currentName);
+                        PluginLog?.Information($"Sent name update: {currentName}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                PluginLog?.Error($"Error sending name update: {ex.Message}");
             }
         }
 

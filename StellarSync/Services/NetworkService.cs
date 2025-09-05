@@ -23,7 +23,7 @@ namespace StellarSync.Services
 
         public bool IsConnected => isConnected;
 
-        public async Task ConnectAsync(string serverUrl, string userName = "Unknown")
+        public async Task ConnectAsync(string serverUrl, string userName = "Unknown", string zone = "")
 {
 	try
 	{
@@ -52,7 +52,8 @@ namespace StellarSync.Services
 			data = new
 			{
 				user_id = currentUserId,
-				name = userName
+				name = userName,
+				zone = zone // Add zone information if provided
 			}
 		};
 
@@ -84,6 +85,8 @@ namespace StellarSync.Services
         {
             return currentUserId;
         }
+
+
 
         public async Task SendMessageAsync(string message)
         {
@@ -330,6 +333,33 @@ public async Task RequestUserDataAsync(string userId)
             catch (Exception ex)
             {
                 ErrorOccurred?.Invoke(this, ex.Message);
+            }
+        }
+
+        public async Task SendNameUpdateAsync(string newName)
+        {
+            if (!isConnected)
+            {
+                throw new InvalidOperationException("Not connected to server");
+            }
+
+            try
+            {
+                var message = new
+                {
+                    type = "name_update",
+                    data = new
+                    {
+                        name = newName
+                    }
+                };
+
+                await SendMessageAsync(JsonConvert.SerializeObject(message));
+            }
+            catch (Exception ex)
+            {
+                ErrorOccurred?.Invoke(this, $"Failed to send name update: {ex.Message}");
+                throw;
             }
         }
 

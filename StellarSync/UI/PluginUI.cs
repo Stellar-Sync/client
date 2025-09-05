@@ -67,6 +67,7 @@ private List<dynamic> onlineUsers = new List<dynamic>();
         private ReceivedModsService? receivedModsService;
         private IPluginLog? pluginLog;
         private IClientState? clientState;
+        private IFramework? framework;
 
         public PluginUI() : base("Stellar Sync###StellarSyncMainUI")
         {
@@ -286,6 +287,11 @@ public void SetPluginLog(IPluginLog pluginLog)
             this.clientState = clientState;
         }
 
+        public void SetFramework(IFramework framework)
+        {
+            this.framework = framework;
+        }
+
         public void SetCharacterSyncService(CharacterSyncService characterSyncService)
         {
             this.characterSyncService = characterSyncService;
@@ -355,9 +361,10 @@ public void SetPluginLog(IPluginLog pluginLog)
                 }
                 else
 {
-	// Get the player's character name
+	// Get the player's character name and current zone
 	var characterName = GetPlayerCharacterName();
-	await networkService.ConnectAsync(serverUrl, characterName);
+	var currentZone = GetCurrentZone();
+	await networkService.ConnectAsync(serverUrl, characterName, currentZone);
 	
 	// Request users list after connection
 	_ = Task.Run(async () =>
@@ -538,6 +545,20 @@ public void SetPluginLog(IPluginLog pluginLog)
                     pluginLog?.Warning($"Failed to prepare Penumbra file metadata for transfer: {fileEx.Message}");
                 }
                 
+                // Get current zone on main thread
+                string currentZone = "Unknown";
+                if (framework != null)
+                {
+                    await framework.RunOnFrameworkThread(() =>
+                    {
+                        currentZone = GetCurrentZone();
+                    });
+                }
+                else
+                {
+                    currentZone = GetCurrentZone(); // Fallback if framework not available
+                }
+
                 // Create character data object (core data only - file metadata sent via HTTP)
                 var characterData = new
                 {
@@ -545,10 +566,19 @@ public void SetPluginLog(IPluginLog pluginLog)
                     glamourer_data = glamourerData,
                     penumbra_meta = penumbraMetaData,
                     // penumbra_file_metadata = penumbraFileMetadata, // File metadata sent via HTTP endpoint
-                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                    timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+                    zone = currentZone // Add current zone information
                 };
 
                 await networkService.SendCharacterDataAsync(characterData);
+                
+                // Also send name update to ensure the server has the correct name
+                if (characterName != "Unknown" && characterName != $"Player_{DateTime.Now:HHmmss}")
+                {
+                    await networkService.SendNameUpdateAsync(characterName);
+                    pluginLog?.Information($"Sent name update: {characterName}");
+                }
+                
                 sendToServerResult = "Character data sent successfully!";
                 UpdateTestInfo("Character data sent successfully!");
             }
@@ -611,6 +641,12 @@ public void SetPluginLog(IPluginLog pluginLog)
                     case "user_character_data":
                         HandleUserCharacterData(messageObj?.data);
                         break;
+                    case "sync_request_queued":
+                        HandleSyncRequestQueued(messageObj?.data);
+                        break;
+                    case "error":
+                        HandleServerError(messageObj?.error);
+                        break;
                     case "character_data_received":
                         sendToServerResult = "Character data received by server!";
                         break;
@@ -639,9 +675,9 @@ private void HandleUsersList(dynamic usersData)
 		}
 	}
 	catch (Exception ex)
-{
-	pluginLog?.Error($"Failed to handle users list: {ex.Message}");
-}
+	{
+		pluginLog?.Error($"Failed to handle users list: {ex.Message}");
+	}
 }
 
 private void HandleUserCharacterData(dynamic data)
@@ -766,6 +802,89 @@ private void HandleUserCharacterData(dynamic data)
 	}
 }
 
+/// <summary>
+/// Handles error messages from the server
+/// </summary>
+private void HandleServerError(string errorMessage)
+{
+	try
+	{
+		if (!string.IsNullOrEmpty(errorMessage))
+		{
+			pluginLog?.Warning($"Server error: {errorMessage}");
+			
+			// Update the pair result to show the error
+			if (errorMessage.Contains("User data not found"))
+			{
+				pairResult = "Error: User has not sent any character data yet";
+			}
+			else if (errorMessage.Contains("User is not online"))
+			{
+				pairResult = "Error: User is not currently online";
+			}
+			else
+			{
+				pairResult = $"Server error: {errorMessage}";
+			}
+			
+			// Clear any sync progress since this is an error
+			// Note: We don't know which user this error is for, so we can't update specific progress
+		}
+	}
+	catch (Exception ex)
+	{
+		pluginLog?.Error($"Error handling server error message: {ex.Message}");
+		pairResult = $"Error handling server error: {ex.Message}";
+	}
+}
+
+/// <summary>
+/// Handles sync request queued messages from the server
+/// </summary>
+private void HandleSyncRequestQueued(dynamic data)
+{
+	try
+	{
+		if (data != null)
+		{
+			var message = data.message?.ToString() ?? "Sync request queued";
+			var targetUserId = data.target_user_id?.ToString() ?? "Unknown";
+			var status = data.status?.ToString() ?? "queued";
+			
+			pluginLog?.Information($"Sync request queued: {message}");
+			
+			// Find the target user name for better display
+			var targetUserName = "Unknown User";
+			foreach (var user in onlineUsers)
+			{
+				if (user?.id?.ToString() == targetUserId)
+				{
+					targetUserName = user?.name?.ToString() ?? "Unknown User";
+					break;
+				}
+			}
+			
+			// Update the pair result to show the request is queued
+			pairResult = $"Sync request queued with {targetUserName}. Waiting for character data...";
+			
+			// Update sync progress if we have a user ID
+			var userId = GetUserIdFromCharacterName(targetUserName);
+			if (!string.IsNullOrEmpty(userId))
+			{
+				UpdateSyncProgress(userId, "Request queued, waiting for data...", 0.1f);
+			}
+			
+			// Show a notification that the request is queued
+			pluginLog?.Information($"Your sync request with {targetUserName} has been queued. Data will be delivered automatically when available.");
+		}
+	}
+	catch (Exception ex)
+	{
+		pluginLog?.Error($"Error handling sync request queued message: {ex.Message}");
+		pairResult = $"Error handling queued sync request: {ex.Message}";
+	}
+}
+
 private string GetPlayerCharacterName()
 {
 	try
@@ -874,28 +993,232 @@ private string GetPlayerCharacterName()
 		}
 	}
 	
-	private string GetUserIdFromCharacterName(string characterName)
-	{
-		try
-		{
-			// Look through the online users list to find the user ID for this character name
-			foreach (var user in onlineUsers)
-			{
-				if (user?.name?.ToString() == characterName)
-				{
-					return user?.id?.ToString() ?? string.Empty;
-				}
-			}
-			
-			pluginLog?.Warning($"Could not find user ID for character name: {characterName}");
-			return string.Empty;
-		}
-		catch (Exception ex)
-		{
-			pluginLog?.Error($"Failed to get user ID from character name: {ex.Message}");
-			return string.Empty;
-		}
-	}
+	        private string GetUserIdFromCharacterName(string characterName)
+        {
+            try
+            {
+                // Look through the online users list to find the user ID for this character name
+                foreach (var user in onlineUsers)
+                {
+                    if (user?.name?.ToString() == characterName)
+                    {
+                        return user?.id?.ToString() ?? string.Empty;
+                    }
+                }
+                
+                pluginLog?.Warning($"Could not find user ID for character name: {characterName}");
+                return string.Empty;
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Failed to get user ID from character name: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
+        /// Filters users to only show those in the same zone as the local player
+        /// </summary>
+        private List<dynamic> GetUsersInSameZone(List<dynamic> allUsers)
+        {
+            try
+            {
+                if (clientState?.LocalPlayer == null)
+                {
+                    return new List<dynamic>(); // Return empty list if we can't determine zone
+                }
+
+                var localZone = GetCurrentZone();
+                if (string.IsNullOrEmpty(localZone))
+                {
+                    // If no zone info, show all users for compatibility
+                    return allUsers;
+                }
+
+                var localZoneUsers = new List<dynamic>();
+                var usersInDifferentZones = 0;
+                
+                foreach (var user in allUsers)
+                {
+                    try
+                    {
+                        // Check if user has zone information
+                        var userZone = user?.zone?.ToString();
+                        
+                        // If user has no zone info, skip them for now (they might not have zone detection yet)
+                        if (string.IsNullOrEmpty(userZone))
+                        {
+                            continue;
+                        }
+                        
+                        // Only add users in the same zone
+                        if (userZone.Equals(localZone, StringComparison.OrdinalIgnoreCase))
+                        {
+                            localZoneUsers.Add(user);
+                        }
+                        else
+                        {
+                            usersInDifferentZones++;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        pluginLog?.Warning($"Error processing user {user?.name} for zone filtering: {ex.Message}");
+                        // Add user anyway for compatibility
+                        localZoneUsers.Add(user);
+                    }
+                }
+
+                // Only log zone filtering results occasionally to reduce spam
+                if (localZoneUsers.Count > 0 || usersInDifferentZones > 0)
+                {
+                    pluginLog?.Debug($"Zone filtering: {localZoneUsers.Count} users in zone {localZone}, {usersInDifferentZones} in other zones");
+                }
+                
+                return localZoneUsers;
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Error in zone filtering: {ex.Message}");
+                // Return all users on error for compatibility
+                return allUsers;
+            }
+        }
+
+        // Zone detection and caching
+        private string _currentZone = string.Empty;
+        private DateTime _lastZoneUpdate = DateTime.MinValue;
+        private const int ZONE_UPDATE_COOLDOWN_MS = 5000; // Only update zone every 5 seconds
+
+        /// <summary>
+        /// Gets the current zone/area the local player is in with caching and reduced logging
+        /// </summary>
+        private string GetCurrentZone()
+        {
+            try
+            {
+                if (clientState?.LocalPlayer == null)
+                {
+                    return string.Empty;
+                }
+
+                // Check if we need to update the zone (cooldown to reduce logging)
+                var now = DateTime.Now;
+                if (!string.IsNullOrEmpty(_currentZone) && 
+                    (now - _lastZoneUpdate).TotalMilliseconds < ZONE_UPDATE_COOLDOWN_MS)
+                {
+                    return _currentZone; // Return cached zone
+                }
+
+
+                var territoryType = clientState.TerritoryType;
+                if (territoryType != 0)
+                {
+                    var newZone = $"Zone_{territoryType}";
+                    
+                    // Only log if zone actually changed
+                    if (newZone != _currentZone)
+                    {
+                        pluginLog?.Information($"Zone changed: {_currentZone} → {newZone}");
+                        _currentZone = newZone;
+                        _lastZoneUpdate = now;
+                        
+                        // If we're connected, send updated zone info to server
+                        if (networkService?.IsConnected == true)
+                        {
+                            _ = Task.Run(async () => await SendZoneUpdateAsync(newZone));
+                        }
+                    }
+                    
+                    return _currentZone;
+                }
+
+                // If no territory type, return empty (will show all users for compatibility)
+                if (string.IsNullOrEmpty(_currentZone))
+                {
+                    pluginLog?.Debug("No territory type available, zone filtering disabled");
+                    _currentZone = string.Empty;
+                    _lastZoneUpdate = now;
+                }
+                
+                return _currentZone;
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Error getting current zone: {ex.Message}");
+                return string.Empty;
+            }
+        }
+
+
+
+        /// <summary>
+        /// Debug method to show current zone information
+        /// </summary>
+        public void ShowZoneDebugInfo()
+        {
+            try
+            {
+                var currentZone = GetCurrentZone();
+                var localPlayer = clientState?.LocalPlayer;
+                
+                pluginLog?.Information("=== ZONE DEBUG INFO ===");
+                pluginLog?.Information($"Current Zone: {currentZone}");
+                pluginLog?.Information($"Local Player: {localPlayer?.Name ?? "Unknown"}");
+                pluginLog?.Information($"Territory Type: {clientState?.TerritoryType ?? 0}");
+                
+                if (onlineUsers?.Count > 0)
+                {
+                    pluginLog?.Information($"Online Users ({onlineUsers.Count}):");
+                    foreach (var user in onlineUsers)
+                    {
+                        var userName = user?.name?.ToString() ?? "Unknown";
+                        var userZone = user?.zone?.ToString() ?? "No Zone Info";
+                        var isSameZone = userZone.Equals(currentZone, StringComparison.OrdinalIgnoreCase);
+                        pluginLog?.Information($"  - {userName}: Zone={userZone}, Same Zone={isSameZone}");
+                    }
+                }
+                else
+                {
+                    pluginLog?.Information("No online users found");
+                }
+                
+                pluginLog?.Information("=== END ZONE DEBUG ===");
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Error showing zone debug info: {ex.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Sends zone update to server without full character data
+        /// </summary>
+        private async Task SendZoneUpdateAsync(string newZone)
+        {
+            try
+            {
+                if (networkService?.IsConnected == true)
+                {
+                    var zoneUpdate = new
+                    {
+                        type = "zone_update",
+                        data = new
+                        {
+                            zone = newZone,
+                            timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+                        }
+                    };
+
+                    await networkService.SendMessageAsync(Newtonsoft.Json.JsonConvert.SerializeObject(zoneUpdate));
+                    pluginLog?.Debug($"Sent zone update to server: {newZone}");
+                }
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Warning($"Failed to send zone update: {ex.Message}");
+            }
+        }
 	
 	private async Task DownloadAndApplyFilesAsync(Dictionary<string, object> fileMetadata, string sourceCharacterName)
 	{
@@ -1028,8 +1351,8 @@ private string GetPlayerCharacterName()
 					pluginLog?.Information($"Applying files to received mods directory: {receivedModsPath}");
 					pluginLog?.Information($"DEBUG: Using ModIntegrationService path: {receivedModsPath}");
 					
-					// Apply the downloaded files to Penumbra
-					var applyResult = await modIntegrationService.ApplyDownloadedFilesToPenumbraAsync(receivedModsPath);
+					// Apply the downloaded files to Penumbra for the target character
+					var applyResult = await modIntegrationService.ApplyDownloadedFilesToPenumbraAsync(receivedModsPath, sourceCharacterName);
 					pluginLog?.Information($"File application result: {applyResult}");
 					
 					// Complete sync progress
@@ -1114,13 +1437,16 @@ private string GetPlayerCharacterName()
                     
                     ImGui.Separator();
                     
-                    // Online Users section
-                    ImGui.Text("Other Online Users:");
+                    // Local Users section (same zone only)
+                    ImGui.Text("Nearby Users:");
                     ImGui.Separator();
 
-if (onlineUsers.Count > 0)
+// Filter users by zone (only show users in the same zone as local player)
+var localZoneUsers = GetUsersInSameZone(onlineUsers);
+
+if (localZoneUsers.Count > 0)
 {
-	foreach (var user in onlineUsers)
+	foreach (var user in localZoneUsers)
 	{
 		var userName = user?.name?.ToString() ?? "Unknown";
 		var userId = user?.id?.ToString() ?? "";
@@ -1169,8 +1495,8 @@ if (onlineUsers.Count > 0)
 }
 else
 {
-	ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No other users online");
-	ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Other players will appear here when they connect");
+	ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "No users in your current zone");
+	ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Other players will appear here when they're nearby");
 }
 
 // Show pair result

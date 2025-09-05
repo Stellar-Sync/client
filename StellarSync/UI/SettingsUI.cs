@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Numerics;
+using System.Threading.Tasks;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.ImGuiFileDialog;
@@ -30,6 +31,10 @@ namespace StellarSync.UI
         
         // Configuration reference
         private Configuration.Configuration? _configuration;
+        
+        // Services for testing functionality
+        private ModIntegrationService? _modIntegrationService;
+        private PluginUI? _mainUI;
 
         public SettingsUI(FileDialogManager fileDialogManager) : base("Stellar Sync Settings###StellarSyncSettingsUI")
         {
@@ -80,6 +85,16 @@ namespace StellarSync.UI
         {
             // Settings UI doesn't need direct network service access
             // but we keep this for consistency with the main UI
+        }
+        
+        public void SetModIntegrationService(ModIntegrationService modIntegrationService)
+        {
+            _modIntegrationService = modIntegrationService;
+        }
+
+        public void SetMainUI(PluginUI mainUI)
+        {
+            _mainUI = mainUI;
         }
 
         public override void Draw()
@@ -287,8 +302,71 @@ namespace StellarSync.UI
             ImGui.Text("Debug Options:");
             ImGui.Spacing();
             
-            // TODO: Add debug settings
-            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Debug options will be added here.");
+            // Penumbra Connectivity Test Button
+            if (ImGui.Button("Test Penumbra Connectivity", new Vector2(250, 30)))
+            {
+                _ = Task.Run(async () =>
+                {
+                    if (_modIntegrationService != null)
+                    {
+                        var result = await _modIntegrationService.TestPenumbraConnectivityAsync();
+                        // Note: In a real implementation, you might want to show this result in the UI
+                        // For now, we'll just log it
+                        System.Diagnostics.Debug.WriteLine($"Penumbra Connectivity Test Result: {result}");
+                    }
+                });
+            }
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Test Penumbra API connectivity and functionality.\n\nThis will:\n• Check if Penumbra mod directory is accessible\n• Test meta manipulation access\n• Verify resource path functionality\n• Validate API connectivity\n\nSafe to use - won't affect your current collection or settings.");
+            }
+            
+            ImGui.Spacing();
+            
+            // Penumbra Temporary Collection Test Button
+            if (ImGui.Button("Test Penumbra Temp Collection", new Vector2(250, 30)))
+            {
+                _ = Task.Run(async () =>
+                {
+                    if (_modIntegrationService != null)
+                    {
+                        var result = await _modIntegrationService.TestTemporaryCollectionAsync();
+                        // Note: In a real implementation, you might want to show this result in the UI
+                        // For now, we'll just log it
+                        System.Diagnostics.Debug.WriteLine($"Penumbra Temp Collection Test Result: {result}");
+                    }
+                });
+            }
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Test Penumbra temporary collection functionality.\n\nThis will:\n• Create a test temporary collection\n• Assign it to your character\n• Verify the assignment works\n• Clean up the test collection\n\nSafe to use - creates and removes a test collection without affecting your current setup.");
+            }
+            
+            ImGui.Spacing();
+            
+            // Zone Debug Button
+            if (ImGui.Button("Debug Zone Info", new Vector2(250, 30)))
+            {
+                // Call the main UI's zone debug method
+                if (_mainUI != null)
+                {
+                    _mainUI.ShowZoneDebugInfo();
+                }
+                else
+                {
+                    System.Diagnostics.Debug.WriteLine("Zone Debug button clicked - but main UI not available");
+                }
+            }
+            
+            if (ImGui.IsItemHovered())
+            {
+                ImGui.SetTooltip("Debug zone detection and filtering.\n\nThis will:\n• Show current detected zone\n• Display zone filtering results\n• Help troubleshoot zone-related issues\n\nUseful for debugging why users might not appear in the same zone.");
+            }
+            
+            ImGui.Spacing();
+            ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "These buttons test Penumbra API functionality.");
             ImGui.TextColored(new Vector4(0.7f, 0.7f, 0.7f, 1.0f), "Performance settings will be added here.");
         }
         
