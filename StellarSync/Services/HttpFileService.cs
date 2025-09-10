@@ -224,6 +224,9 @@ namespace StellarSync.Services
         {
             try
             {
+                logger?.Information($"CRITICAL: Starting metadata upload for user {userId} with {fileMetadata.Count} files");
+                logger?.Information($"CRITICAL: Server URL: {serverBaseUrl}");
+                
                 var requestData = new
                 {
                     user_id = userId,
@@ -232,24 +235,30 @@ namespace StellarSync.Services
 
                 var jsonContent = JsonSerializer.Serialize(requestData);
                 var stringContent = new StringContent(jsonContent, System.Text.Encoding.UTF8, "application/json");
-
+                
+                logger?.Information($"CRITICAL: Sending POST request to {serverBaseUrl}/metadata/upload");
                 var response = await httpClient.PostAsync($"{serverBaseUrl}/metadata/upload", stringContent);
+                
+                logger?.Information($"CRITICAL: Received response status: {response.StatusCode}");
                 
                 if (response.IsSuccessStatusCode)
                 {
-                    logger?.Information($"Successfully uploaded file metadata for user {userId}: {fileMetadata.Count} files");
+                    var responseContent = await response.Content.ReadAsStringAsync();
+                    logger?.Information($"CRITICAL: Successfully uploaded file metadata for user {userId}: {fileMetadata.Count} files");
+                    logger?.Information($"CRITICAL: Server response: {responseContent}");
                     return true;
                 }
                 else
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
-                    logger?.Error($"Failed to upload file metadata for user {userId}: {response.StatusCode} - {errorContent}");
+                    logger?.Error($"CRITICAL: Failed to upload file metadata for user {userId}: {response.StatusCode} - {errorContent}");
                     return false;
                 }
             }
             catch (Exception ex)
             {
-                logger?.Error($"Exception uploading file metadata for user {userId}: {ex.Message}");
+                logger?.Error($"CRITICAL: Exception uploading file metadata for user {userId}: {ex.Message}");
+                logger?.Error($"CRITICAL: Stack trace: {ex.StackTrace}");
                 return false;
             }
         }

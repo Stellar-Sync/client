@@ -475,31 +475,46 @@ namespace StellarSync.Services
         {
             if (!GlamourerAvailable || _glamourerGetAllCustomization == null)
             {
-                _logger.Warning("Glamourer API not available for data retrieval");
+                _logger.Warning("CRITICAL: Glamourer API not available for data retrieval");
                 return string.Empty;
             }
             
             try
             {
+                _logger.Information("CRITICAL: Starting Glamourer data collection");
+                
                 // Convert address to object index
                 var objectIndex = await GetObjectIndexFromAddressAsync(characterAddress);
-                if (objectIndex == -1) return string.Empty;
+                _logger.Information($"CRITICAL: Character address {characterAddress} -> object index: {objectIndex}");
                 
-                _logger.Information($"Getting Glamourer data for object index: {objectIndex}");
+                if (objectIndex == -1) 
+                {
+                    _logger.Warning("CRITICAL: Invalid object index for Glamourer data collection");
+                    return string.Empty;
+                }
+                
+                _logger.Information($"CRITICAL: Getting Glamourer data for object index: {objectIndex}");
                 var result = _glamourerGetAllCustomization.Invoke((ushort)objectIndex);
-                var data = result.Item2 ?? string.Empty;
+                _logger.Information($"CRITICAL: Glamourer API result: {result.Item1} (success: {result.Item1 == Glamourer.Api.Enums.GlamourerApiEc.Success})");
                 
-                _logger.Information($"Glamourer data retrieved, length: {data.Length}");
+                var data = result.Item2 ?? string.Empty;
+                _logger.Information($"CRITICAL: Glamourer data retrieved, length: {data.Length}");
+                
                 if (!string.IsNullOrEmpty(data))
                 {
-                    _logger.Information($"Glamourer data preview: {data.Substring(0, Math.Min(100, data.Length))}...");
+                    _logger.Information($"CRITICAL: Glamourer data preview: {data.Substring(0, Math.Min(100, data.Length))}...");
+                }
+                else
+                {
+                    _logger.Warning("CRITICAL: Glamourer data is empty - this might indicate the character has no customizations or Glamourer is not working properly");
                 }
                 
                 return data;
             }
             catch (Exception ex)
             {
-                _logger.Error($"Failed to get Glamourer data: {ex.Message}");
+                _logger.Error($"CRITICAL: Failed to get Glamourer data: {ex.Message}");
+                _logger.Error($"CRITICAL: Stack trace: {ex.StackTrace}");
                 return string.Empty;
             }
         }
@@ -548,6 +563,124 @@ return fileData;
 		return new Dictionary<string, HashSet<string>>();
 	}
 }
+
+        // NEW METHOD: Get Penumbra data from all available collections instead of character-specific
+        public async Task<Dictionary<string, HashSet<string>>> GetPenumbraDataFromCollectionsAsync()
+        {
+            if (!PenumbraAvailable)
+            {
+                _logger.Warning("Penumbra not available for collection data retrieval");
+                return new Dictionary<string, HashSet<string>>();
+            }
+            
+            try
+            {
+                _logger.Information("CRITICAL: Getting Penumbra data from all available collections");
+                
+                // Get all collections
+                var collections = _penumbraGetCollections.Invoke();
+                if (collections == null || collections.Count == 0)
+                {
+                    _logger.Information("CRITICAL: No Penumbra collections found");
+                    return new Dictionary<string, HashSet<string>>();
+                }
+                
+                _logger.Information($"CRITICAL: Found {collections.Count} Penumbra collections");
+                
+                var allModData = new Dictionary<string, HashSet<string>>();
+                
+                // Get mod data from each collection
+                foreach (var collection in collections)
+                {
+                    try
+                    {
+                        var collectionName = collection.Value; // Get the collection name
+                        _logger.Information($"CRITICAL: Processing collection: {collectionName}");
+                        
+                        // Get mod directory
+                        var modDirectory = _penumbraGetModDirectory.Invoke();
+                        if (string.IsNullOrEmpty(modDirectory))
+                        {
+                            _logger.Warning($"CRITICAL: Mod directory not found for collection {collectionName}");
+                            continue;
+                        }
+                        
+                        // Get collection-specific mod data
+                        var collectionModData = await GetModDataFromCollection(collectionName, modDirectory);
+                        if (collectionModData.Count > 0)
+                        {
+                            _logger.Information($"CRITICAL: Collection {collectionName} has {collectionModData.Count} mod categories");
+                            
+                            // Merge with existing data
+                            foreach (var kvp in collectionModData)
+                            {
+                                if (!allModData.ContainsKey(kvp.Key))
+                                {
+                                    allModData[kvp.Key] = new HashSet<string>();
+                                }
+                                allModData[kvp.Key].UnionWith(kvp.Value);
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"CRITICAL: Failed to process collection {collection}: {ex.Message}");
+                    }
+                }
+                
+                _logger.Information($"CRITICAL: Total mod data collected: {allModData.Count} categories");
+                foreach (var kvp in allModData)
+                {
+                    _logger.Information($"CRITICAL: Category {kvp.Key}: {kvp.Value.Count} files");
+                }
+                
+                return allModData;
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"CRITICAL: Failed to get Penumbra data from collections: {ex.Message}");
+                return new Dictionary<string, HashSet<string>>();
+            }
+        }
+        
+        private async Task<Dictionary<string, HashSet<string>>> GetModDataFromCollection(string collectionName, string modDirectory)
+        {
+            var modData = new Dictionary<string, HashSet<string>>();
+            
+            try
+            {
+                // This is a simplified approach - in reality, we'd need to parse the collection files
+                // For now, let's try to get data from the mod directory structure
+                var collectionPath = Path.Combine(modDirectory, collectionName);
+                if (Directory.Exists(collectionPath))
+                {
+                    _logger.Information($"CRITICAL: Found collection directory: {collectionPath}");
+                    
+                    // Scan for mod files in the collection directory
+                    var modFiles = Directory.GetFiles(collectionPath, "*", SearchOption.AllDirectories)
+                        .Where(f => IsModFile(f))
+                        .ToArray();
+                    
+                    if (modFiles.Length > 0)
+                    {
+                        modData["collection"] = new HashSet<string>(modFiles);
+                        _logger.Information($"CRITICAL: Found {modFiles.Length} mod files in collection {collectionName}");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"CRITICAL: Failed to get mod data from collection {collectionName}: {ex.Message}");
+            }
+            
+            return modData;
+        }
+        
+        private bool IsModFile(string filePath)
+        {
+            var ext = Path.GetExtension(filePath).ToLowerInvariant();
+            return ext is ".tex" or ".mtrl" or ".mdl" or ".tmb" or ".scd" or ".pap";
+        }
 
 
         
@@ -603,7 +736,6 @@ public string GetPenumbraMetaManipulations()
                         if (!string.IsNullOrEmpty(name))
                         {
                             _playerCharacters[name] = (name, obj.Address);
-                            _logger.Debug($"Cached player character: {name} at {obj.Address:X}");
                         }
                     }
                 });
@@ -704,6 +836,49 @@ public string GetPenumbraMetaManipulations()
                 return -1;
             }
         }
+        
+        // NEW METHOD: Get local player's address for data collection
+        public async Task<IntPtr> GetLocalPlayerAddressAsync()
+        {
+            try
+            {
+                return await RunOnFrameworkThreadAsync(() =>
+                {
+                    if (_clientState?.LocalPlayer != null)
+                    {
+                        var address = _clientState.LocalPlayer.Address;
+                        _logger.Information($"CRITICAL: Local player address: {address:X}");
+                        return address;
+                    }
+                    
+                    _logger.Warning("CRITICAL: Local player not available");
+                    return IntPtr.Zero;
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"CRITICAL: Failed to get local player address: {ex.Message}");
+                return IntPtr.Zero;
+            }
+        }
+        
+        // NEW METHOD: Get currently visible player characters for visibility detection
+        public Dictionary<string, (string Name, IntPtr Address)> GetPlayerCharacters()
+        {
+            try
+            {
+                // Update the cache first to ensure it's current
+                _ = Task.Run(async () => await UpdateCharacterCacheAsync());
+                
+                // Return a copy of the current cache
+                return new Dictionary<string, (string Name, IntPtr Address)>(_playerCharacters);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error getting player characters: {ex.Message}");
+                return new Dictionary<string, (string Name, IntPtr Address)>();
+            }
+        }
 
         private bool ValidateObjectIndexForCharacter(int objectIndex, string characterName)
         {
@@ -801,6 +976,13 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
             {
                 _logger.Error("CRITICAL: Attempted to apply Glamourer data without target character name - REJECTED");
                 return "CRITICAL ERROR: Cannot apply data without target character name";
+            }
+            
+            // STRICT SAFEGUARD: Never allow empty or invalid Glamourer data
+            if (string.IsNullOrEmpty(glamourerData) || glamourerData == "[]" || glamourerData.Trim() == "")
+            {
+                _logger.Warning($"CRITICAL: Attempted to apply empty/invalid Glamourer data '{glamourerData}' to character '{targetCharacterName}' - SKIPPING");
+                return "SKIPPED: Empty or invalid Glamourer data";
             }
             
             await _applySemaphore.WaitAsync();

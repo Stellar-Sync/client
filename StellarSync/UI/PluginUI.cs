@@ -237,6 +237,136 @@ private void OnNetworkMessageReceived(object? sender, string message)
 private void OnNetworkConnected(object? sender, EventArgs e)
 {
 	UpdateConnectionStatus(true, "Connected");
+	
+	// Automatically upload file metadata when connecting to server
+	_ = Task.Run(async () =>
+	{
+		try
+		{
+			pluginLog?.Information("CRITICAL: OnNetworkConnected triggered - starting auto-upload process");
+			await Task.Delay(2000); // Wait for connection to stabilize
+			
+			if (modIntegrationService != null)
+			{
+				var userId = GetPlayerUserId(); // Get current user ID
+				pluginLog?.Information($"CRITICAL: Retrieved user ID for auto-upload: {userId}");
+				
+				if (!string.IsNullOrEmpty(userId))
+				{
+					pluginLog?.Information("CRITICAL: Starting auto-upload of file metadata after connection...");
+					
+					// Get Penumbra file metadata and upload it
+					var penumbraDataDict = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
+					pluginLog?.Information($"CRITICAL: Retrieved {penumbraDataDict.Count} Penumbra data entries");
+					
+					if (penumbraDataDict.Count > 0)
+					{
+						var penumbraFileMetadata = await modIntegrationService.GetPenumbraFileMetadataForTransfer(penumbraDataDict);
+						pluginLog?.Information($"CRITICAL: Prepared {penumbraFileMetadata?.Count ?? 0} file metadata entries");
+						
+						if (penumbraFileMetadata != null && penumbraFileMetadata.Count > 0)
+						{
+							pluginLog?.Information($"CRITICAL: Attempting to upload {penumbraFileMetadata.Count} file metadata entries for user {userId}");
+							var uploadSuccess = await modIntegrationService.UploadFileMetadataAsync(userId, penumbraFileMetadata);
+							if (uploadSuccess)
+							{
+								pluginLog?.Information($"CRITICAL: Successfully auto-uploaded file metadata for {penumbraFileMetadata.Count} files for user {userId}");
+							}
+							else
+							{
+								pluginLog?.Error($"CRITICAL: Failed to auto-upload file metadata for user {userId}");
+							}
+						}
+						else
+						{
+							pluginLog?.Warning($"CRITICAL: No Penumbra file metadata to upload for user {userId}");
+						}
+					}
+					else
+					{
+						pluginLog?.Information($"CRITICAL: No Penumbra data found for user {userId} - uploading empty metadata to prevent NotFound errors");
+						
+						// Upload empty metadata to prevent "NotFound" errors when other users try to download
+						var emptyMetadata = new Dictionary<string, object>();
+						var uploadSuccess = await modIntegrationService.UploadFileMetadataAsync(userId, emptyMetadata);
+						if (uploadSuccess)
+						{
+							pluginLog?.Information($"CRITICAL: Successfully uploaded empty metadata for user {userId} (no mods)");
+						}
+						else
+						{
+							pluginLog?.Error($"CRITICAL: Failed to upload empty metadata for user {userId}");
+						}
+					}
+				}
+				else
+				{
+					pluginLog?.Error("CRITICAL: No user ID available for auto-upload");
+				}
+			}
+			else
+			{
+				pluginLog?.Error("CRITICAL: modIntegrationService is null during auto-upload");
+			}
+			
+			// Also automatically send character data (Glamourer + Penumbra metadata) after metadata upload
+			pluginLog?.Information("CRITICAL: Starting automatic character data send after connection...");
+			await Task.Delay(1000); // Small delay after metadata upload
+			
+			try
+			{
+				// Collect character data - get local player's address instead of IntPtr.Zero
+				var localPlayerAddress = await modIntegrationService.GetLocalPlayerAddressAsync();
+				var characterData = await modIntegrationService.GetGlamourerDataAsync(localPlayerAddress);
+				var penumbraData = await modIntegrationService.GetPenumbraDataAsync(localPlayerAddress); // Back to character-specific
+				var metaManipulations = modIntegrationService.GetPenumbraMetaManipulations();
+				
+				pluginLog?.Information($"CRITICAL: Collected character data - Glamourer: {!string.IsNullOrEmpty(characterData)}, Penumbra files: {penumbraData.Count}, Meta: {!string.IsNullOrEmpty(metaManipulations)}");
+				
+				// Debug: Log detailed mod information
+				if (penumbraData.Count > 0)
+				{
+					pluginLog?.Information($"CRITICAL: Penumbra data details:");
+					foreach (var kvp in penumbraData.Take(5)) // Show first 5 entries
+					{
+						pluginLog?.Information($"CRITICAL: - {kvp.Key}: {kvp.Value.Count} files");
+					}
+				}
+				else
+				{
+					pluginLog?.Warning($"CRITICAL: No Penumbra data found - this might indicate mod detection issues");
+				}
+				
+				if (!string.IsNullOrEmpty(metaManipulations))
+				{
+					pluginLog?.Information($"CRITICAL: Penumbra meta manipulations found: {metaManipulations.Length} characters");
+				}
+				else
+				{
+					pluginLog?.Warning($"CRITICAL: No Penumbra meta manipulations found");
+				}
+				
+				// Store the data for display
+				this.glamourerData = characterData;
+				this.penumbraData = penumbraData.Count > 0 ? $"Files: {penumbraData.Count}" : "No files";
+				this.penumbraMetaData = metaManipulations;
+				this.showModData = true;
+				
+				// Send character data to server
+				SendCharacterDataToServer();
+				pluginLog?.Information("CRITICAL: Successfully sent character data automatically after connection");
+			}
+			catch (Exception charDataEx)
+			{
+				pluginLog?.Error($"CRITICAL: Error during automatic character data send: {charDataEx.Message}");
+			}
+		}
+		catch (Exception ex)
+		{
+			pluginLog?.Error($"CRITICAL: Error during auto-upload of file metadata: {ex.Message}");
+			pluginLog?.Error($"CRITICAL: Stack trace: {ex.StackTrace}");
+		}
+	});
 }
 
 private void OnNetworkDisconnected(object? sender, EventArgs e)
@@ -446,9 +576,10 @@ public void SetPluginLog(IPluginLog pluginLog)
             {
                 UpdateTestInfo("Collecting and sending character data...");
                 
-                // Step 1: Collect character data
-                var characterData = await modIntegrationService.GetGlamourerDataAsync(IntPtr.Zero);
-                var penumbraData = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
+                // Step 1: Collect character data - get local player's address instead of IntPtr.Zero
+                var localPlayerAddress = await modIntegrationService.GetLocalPlayerAddressAsync();
+                var characterData = await modIntegrationService.GetGlamourerDataAsync(localPlayerAddress);
+                var penumbraData = await modIntegrationService.GetPenumbraDataAsync(localPlayerAddress); // Back to character-specific
                 var metaManipulations = modIntegrationService.GetPenumbraMetaManipulations();
                 
                 // Store the data for display
@@ -531,7 +662,8 @@ public void SetPluginLog(IPluginLog pluginLog)
                 Dictionary<string, object> penumbraFileMetadata = null;
                 try
                 {
-                    var penumbraDataDict = await modIntegrationService.GetPenumbraDataAsync(IntPtr.Zero);
+                    var localPlayerAddress = await modIntegrationService.GetLocalPlayerAddressAsync();
+                    var penumbraDataDict = await modIntegrationService.GetPenumbraDataAsync(localPlayerAddress); // Back to character-specific
                     if (penumbraDataDict.Count > 0)
                     {
                         penumbraFileMetadata = await modIntegrationService.GetPenumbraFileMetadataForTransfer(penumbraDataDict);
@@ -575,11 +707,19 @@ public void SetPluginLog(IPluginLog pluginLog)
                     currentZone = GetCurrentZone(); // Fallback if framework not available
                 }
 
+                // Validate Glamourer data before sending
+                string validGlamourerData = glamourerData;
+                if (string.IsNullOrEmpty(glamourerData) || glamourerData == "[]" || glamourerData.Trim() == "")
+                {
+                    pluginLog?.Warning($"CRITICAL: Empty or invalid Glamourer data detected: '{glamourerData}' - will not send to server");
+                    validGlamourerData = null; // Don't send empty data
+                }
+                
                 // Create character data object (core data only - file metadata sent via HTTP)
                 var characterData = new
                 {
                     character_name = characterName,
-                    glamourer_data = glamourerData,
+                    glamourer_data = validGlamourerData, // Use validated data
                     penumbra_meta = penumbraMetaData,
                     // penumbra_file_metadata = penumbraFileMetadata, // File metadata sent via HTTP endpoint
                     timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
@@ -734,6 +874,15 @@ private void HandleUserCharacterData(dynamic data)
                     if (characterData?.glamourer_data != null)
                     {
                         await modIntegrationService.ApplyGlamourerData(characterData.glamourer_data.ToString(), sourceCharacterName);
+                        if (!string.IsNullOrEmpty(userId))
+                        {
+                            UpdateSyncProgress(userId, "Applying Penumbra meta...", 0.5f);
+                        }
+                    }
+                    else
+                    {
+                        // No Glamourer data, skip to next step
+                        pluginLog?.Information($"No Glamourer data found for {sourceCharacterName}, skipping Glamourer application");
                         if (!string.IsNullOrEmpty(userId))
                         {
                             UpdateSyncProgress(userId, "Applying Penumbra meta...", 0.5f);
@@ -1015,72 +1164,104 @@ private string GetPlayerCharacterName()
         }
 
         /// <summary>
-        /// Filters users to only show those in the same zone as the local player
+        /// Filters users to only show those who are visually visible to the local player
         /// </summary>
-        private List<dynamic> GetUsersInSameZone(List<dynamic> allUsers)
+        private List<dynamic> GetVisuallyVisibleUsers(List<dynamic> allUsers)
         {
             try
             {
                 if (clientState?.LocalPlayer == null)
                 {
-                    return new List<dynamic>(); // Return empty list if we can't determine zone
+                    return new List<dynamic>(); // Return empty list if we can't determine visibility
                 }
 
-                var localZone = GetCurrentZone();
-                if (string.IsNullOrEmpty(localZone))
+                // Get list of currently visible player names from object table
+                var visiblePlayerNames = GetCurrentlyVisiblePlayerNames();
+                if (visiblePlayerNames.Count == 0)
                 {
-                    // If no zone info, show all users for compatibility
-                    return allUsers;
+                    return new List<dynamic>();
                 }
 
-                var localZoneUsers = new List<dynamic>();
-                var usersInDifferentZones = 0;
+                var visibleUsers = new List<dynamic>();
+                var usersNotVisible = 0;
                 
                 foreach (var user in allUsers)
                 {
                     try
                     {
-                        // Check if user has zone information
-                        var userZone = user?.zone?.ToString();
-                        
-                        // If user has no zone info, skip them for now (they might not have zone detection yet)
-                        if (string.IsNullOrEmpty(userZone))
+                        var userName = user?.name?.ToString();
+                        if (string.IsNullOrEmpty(userName))
                         {
                             continue;
                         }
                         
-                        // Only add users in the same zone
-                        if (userZone.Equals(localZone, StringComparison.OrdinalIgnoreCase))
+                        // Check if this user is currently visible in the game world
+                        if (visiblePlayerNames.Contains(userName))
                         {
-                            localZoneUsers.Add(user);
+                            visibleUsers.Add(user);
                         }
                         else
                         {
-                            usersInDifferentZones++;
+                            usersNotVisible++;
                         }
                     }
                     catch (Exception ex)
                     {
-                        pluginLog?.Warning($"Error processing user {user?.name} for zone filtering: {ex.Message}");
-                        // Add user anyway for compatibility
-                        localZoneUsers.Add(user);
+                        pluginLog?.Warning($"Error processing user {user?.name} for visibility filtering: {ex.Message}");
+                        // Skip user on error for safety
+                        usersNotVisible++;
                     }
                 }
 
-                // Only log zone filtering results occasionally to reduce spam
-                if (localZoneUsers.Count > 0 || usersInDifferentZones > 0)
-                {
-                    pluginLog?.Debug($"Zone filtering: {localZoneUsers.Count} users in zone {localZone}, {usersInDifferentZones} in other zones");
-                }
                 
-                return localZoneUsers;
+                return visibleUsers;
             }
             catch (Exception ex)
             {
-                pluginLog?.Error($"Error in zone filtering: {ex.Message}");
-                // Return all users on error for compatibility
-                return allUsers;
+                pluginLog?.Error($"Error in visibility filtering: {ex.Message}");
+                // Return empty list on error for safety
+                return new List<dynamic>();
             }
+        }
+        
+        /// <summary>
+        /// Gets the names of all players currently visible in the object table
+        /// </summary>
+        private HashSet<string> GetCurrentlyVisiblePlayerNames()
+        {
+            var visibleNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            
+            try
+            {
+                // Use the ModIntegrationService to get visible players
+                if (modIntegrationService == null)
+                {
+                    return visibleNames;
+                }
+
+                // Get the current character cache from ModIntegrationService
+                // This will contain all currently visible players
+                var characterCache = modIntegrationService.GetPlayerCharacters();
+                if (characterCache == null || characterCache.Count == 0)
+                {
+                    return visibleNames;
+                }
+
+                foreach (var character in characterCache)
+                {
+                    var name = character.Key;
+                    if (!string.IsNullOrEmpty(name))
+                    {
+                        visibleNames.Add(name);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Error getting visible player names: {ex.Message}");
+            }
+            
+            return visibleNames;
         }
 
         // Zone detection and caching
@@ -1151,19 +1332,21 @@ private string GetPlayerCharacterName()
 
 
         /// <summary>
-        /// Debug method to show current zone information
+        /// Debug method to show current visibility information
         /// </summary>
-        public void ShowZoneDebugInfo()
+        public void ShowVisibilityDebugInfo()
         {
             try
             {
                 var currentZone = GetCurrentZone();
                 var localPlayer = clientState?.LocalPlayer;
+                var visiblePlayerNames = GetCurrentlyVisiblePlayerNames();
                 
-                pluginLog?.Information("=== ZONE DEBUG INFO ===");
+                pluginLog?.Information("=== VISIBILITY DEBUG INFO ===");
                 pluginLog?.Information($"Current Zone: {currentZone}");
                 pluginLog?.Information($"Local Player: {localPlayer?.Name ?? "Unknown"}");
                 pluginLog?.Information($"Territory Type: {clientState?.TerritoryType ?? 0}");
+                pluginLog?.Information($"Visually Visible Players: {string.Join(", ", visiblePlayerNames)}");
                 
                 if (onlineUsers?.Count > 0)
                 {
@@ -1173,7 +1356,8 @@ private string GetPlayerCharacterName()
                         var userName = user?.name?.ToString() ?? "Unknown";
                         var userZone = user?.zone?.ToString() ?? "No Zone Info";
                         var isSameZone = userZone.Equals(currentZone, StringComparison.OrdinalIgnoreCase);
-                        pluginLog?.Information($"  - {userName}: Zone={userZone}, Same Zone={isSameZone}");
+                        var isVisuallyVisible = visiblePlayerNames.Contains(userName);
+                        pluginLog?.Information($"  - {userName}: Zone={userZone}, Same Zone={isSameZone}, Visually Visible={isVisuallyVisible}");
                     }
                 }
                 else
@@ -1181,11 +1365,11 @@ private string GetPlayerCharacterName()
                     pluginLog?.Information("No online users found");
                 }
                 
-                pluginLog?.Information("=== END ZONE DEBUG ===");
+                pluginLog?.Information("=== END VISIBILITY DEBUG ===");
             }
             catch (Exception ex)
             {
-                pluginLog?.Error($"Error showing zone debug info: {ex.Message}");
+                pluginLog?.Error($"Error showing visibility debug info: {ex.Message}");
             }
         }
 
@@ -1427,16 +1611,16 @@ private string GetPlayerCharacterName()
                     
                     ImGui.Separator();
                     
-                    // Local Users section (same zone only)
-                    ImGui.Text("Nearby Users:");
+                    // Local Users section (visually visible only)
+                    ImGui.Text("Visible Users:");
                     ImGui.Separator();
 
-// Filter users by zone (only show users in the same zone as local player)
-var localZoneUsers = GetUsersInSameZone(onlineUsers);
+// Filter users by visual visibility (only show users who are actually visible in the game world)
+                var visibleUsers = GetVisuallyVisibleUsers(onlineUsers);
 
-if (localZoneUsers.Count > 0)
+if (visibleUsers.Count > 0)
 {
-	foreach (var user in localZoneUsers)
+	foreach (var user in visibleUsers)
 	{
 		var userName = user?.name?.ToString() ?? "Unknown";
 		var userId = user?.id?.ToString() ?? "";
@@ -1605,5 +1789,6 @@ if (!string.IsNullOrEmpty(pairResult))
         }
     }
 }
+
 
 

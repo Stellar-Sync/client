@@ -352,7 +352,7 @@ namespace StellarSync.UI
                 // Call the main UI's zone debug method
                 if (_mainUI != null)
                 {
-                    _mainUI.ShowZoneDebugInfo();
+                    _mainUI.ShowVisibilityDebugInfo();
                 }
                 else
                 {
