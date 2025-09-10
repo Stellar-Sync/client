@@ -3,6 +3,7 @@ using Dalamud.Plugin.Services;
 using Penumbra.Api.Enums;
 using Penumbra.Api.IpcSubscribers;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -20,9 +21,11 @@ namespace StellarSync.Interop.Ipc;
     private readonly GetModDirectory _penumbraGetModDirectory;
     private readonly GetPlayerMetaManipulations _penumbraGetMetaManipulations;
     private readonly GetGameObjectResourcePaths _penumbraResourcePaths;
-            private readonly CreateTemporaryCollection _penumbraCreateTemporaryCollection;
-        private readonly DeleteTemporaryCollection _penumbraDeleteTemporaryCollection;
-        private readonly AssignTemporaryCollection _penumbraAssignTemporaryCollection;
+    private readonly CreateTemporaryCollection _penumbraCreateTemporaryCollection;
+    private readonly DeleteTemporaryCollection _penumbraDeleteTemporaryCollection;
+    private readonly AssignTemporaryCollection _penumbraAssignTemporaryCollection;
+    private readonly AddTemporaryMod _penumbraAddTemporaryMod;
+    private readonly RemoveTemporaryMod _penumbraRemoveTemporaryMod;
         
         /// <summary>
         /// Checks if Penumbra API is available
@@ -41,6 +44,8 @@ namespace StellarSync.Interop.Ipc;
         _penumbraCreateTemporaryCollection = new CreateTemporaryCollection(pluginInterface);
         _penumbraDeleteTemporaryCollection = new DeleteTemporaryCollection(pluginInterface);
         _penumbraAssignTemporaryCollection = new AssignTemporaryCollection(pluginInterface);
+        _penumbraAddTemporaryMod = new AddTemporaryMod(pluginInterface);
+        _penumbraRemoveTemporaryMod = new RemoveTemporaryMod(pluginInterface);
     }
     
     /// <summary>
@@ -132,6 +137,7 @@ namespace StellarSync.Interop.Ipc;
         }
     }
     
+    
     /// <summary>
     /// Deletes a temporary collection
     /// </summary>
@@ -149,6 +155,38 @@ namespace StellarSync.Interop.Ipc;
     }
     
     /// <summary>
+    /// Removes a temporary mod from a collection
+    /// </summary>
+    public PenumbraApiEc RemoveTemporaryMod(string modName, Guid collectionId, int priority)
+    {
+        try
+        {
+            return _penumbraRemoveTemporaryMod.Invoke(modName, collectionId, priority);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to remove temporary mod {modName} from collection {collectionId}: {ex.Message}");
+            return PenumbraApiEc.InvalidArgument;
+        }
+    }
+    
+    /// <summary>
+    /// Adds a temporary mod to a collection
+    /// </summary>
+    public PenumbraApiEc AddTemporaryMod(string modName, Guid collectionId, Dictionary<string, string> modPaths, string manipulationData, int priority)
+    {
+        try
+        {
+            return _penumbraAddTemporaryMod.Invoke(modName, collectionId, modPaths, manipulationData, priority);
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"Failed to add temporary mod {modName} to collection {collectionId}: {ex.Message}");
+            return PenumbraApiEc.InvalidArgument;
+        }
+    }
+    
+    /// <summary>
     /// Assigns a temporary collection to an actor
     /// </summary>
     public PenumbraApiEc AssignTemporaryCollection(Guid collectionId, int actorIndex, bool forceAssignment)
@@ -161,6 +199,38 @@ namespace StellarSync.Interop.Ipc;
         {
             _logger.Error($"Failed to assign Penumbra temporary collection {collectionId} to actor {actorIndex}: {ex.Message}");
             return PenumbraApiEc.InvalidArgument;
+        }
+    }
+    
+    /// <summary>
+    /// Sets temporary mods for a collection (removes existing and adds new ones in a single framework thread call)
+    /// This prevents race conditions that can occur when doing remove + add separately
+    /// </summary>
+    public void SetTemporaryMods(Guid applicationId, Guid collectionId, Dictionary<string, string> modPaths)
+    {
+        if (!IsAvailable) return;
+
+        foreach (var mod in modPaths)
+        {
+            _logger.Verbose($"[{applicationId}] Change: {mod.Key} => {mod.Value}");
+        }
+        
+        // Remove existing mod first
+        var retRemove = _penumbraRemoveTemporaryMod.Invoke("StellarChara_Files", collectionId, 0);
+        _logger.Verbose($"[{applicationId}] Removing temp files mod for {collectionId}, Success: {retRemove}");
+        
+        // Add new mods
+        var retAdd = _penumbraAddTemporaryMod.Invoke("StellarChara_Files", collectionId, modPaths, string.Empty, 0);
+        _logger.Verbose($"[{applicationId}] Setting temp files mod for {collectionId}, Success: {retAdd}");
+        
+        // Log any errors
+        if (retRemove != PenumbraApiEc.Success)
+        {
+            _logger.Warning($"[{applicationId}] Warning: RemoveTemporaryMod returned {retRemove}");
+        }
+        if (retAdd != PenumbraApiEc.Success)
+        {
+            _logger.Error($"[{applicationId}] Error: AddTemporaryMod returned {retAdd}");
         }
     }
     
@@ -252,6 +322,27 @@ namespace StellarSync.Interop.Ipc;
         catch (Exception ex)
         {
             _logger.Error($"Error removing temporary collection: {ex.Message}");
+        }
+    }
+    
+    /// <summary>
+    /// Sets manipulation data for a temporary collection
+    /// </summary>
+    public async Task SetManipulationDataAsync(Guid applicationId, Guid collId, string manipulationData)
+    {
+        if (!IsAvailable) return;
+
+        try
+        {
+            _logger.Information($"[{applicationId}] Setting manipulation data for collection {collId}");
+            _logger.Debug($"[{applicationId}] Manipulation data: {manipulationData?.Substring(0, Math.Min(100, manipulationData?.Length ?? 0))}...");
+            
+            var retAdd = _penumbraAddTemporaryMod.Invoke("StellarChara_Meta", collId, new Dictionary<string, string>(), manipulationData ?? string.Empty, 0);
+            _logger.Information($"[{applicationId}] Setting temp meta mod for {collId}, Success: {retAdd}");
+        }
+        catch (Exception ex)
+        {
+            _logger.Error($"[{applicationId}] Error setting manipulation data: {ex.Message}");
         }
     }
     

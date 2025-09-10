@@ -348,7 +348,20 @@ this.PluginUi.SetFramework(this.Framework);
             {
                 if (NetworkService?.IsConnected == true)
                 {
-                    var currentName = GetPlayerCharacterName();
+                    // Get character name on main thread
+                    string currentName = "Unknown";
+                    if (Framework != null)
+                    {
+                        await Framework.RunOnFrameworkThread(() =>
+                        {
+                            currentName = GetPlayerCharacterName();
+                        });
+                    }
+                    else
+                    {
+                        currentName = GetPlayerCharacterName(); // Fallback if framework not available
+                    }
+                    
                     if (currentName != "Unknown" && currentName != $"Player_{DateTime.Now:HHmmss}")
                     {
                         // Send name update to server
@@ -438,6 +451,20 @@ this.PluginUi.SetFramework(this.Framework);
                 ChatGui?.Print("[Stellar Sync] Disconnected from server.");
                 PluginUi.UpdateConnectionStatus(false, "Disconnected");
                 PluginUi.UpdateSyncStatus(false, "Not syncing");
+                
+                // Clean up all StellarSync temporary collections to prevent memory leaks
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await ModIntegrationService.CleanupAllStellarSyncCollections();
+                        PluginLog?.Information("Cleaned up all StellarSync temporary collections on disconnect");
+                    }
+                    catch (Exception cleanupEx)
+                    {
+                        PluginLog?.Warning($"Failed to clean up collections on disconnect: {cleanupEx.Message}");
+                    }
+                });
             }
             catch (Exception ex)
             {

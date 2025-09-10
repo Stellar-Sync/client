@@ -258,6 +258,11 @@ private void OnNetworkError(object? sender, string error)
 	if (this.modIntegrationService != null && this.settingsUI != null)
 	{
 		var serverUrl = this.settingsUI.GetServerUrl();
+		
+		// Debug logging to see what URL is being used
+		pluginLog?.Information($"DEBUG: OnSettingsChanged - GetServerUrl() returned: '{serverUrl}'");
+		pluginLog?.Information($"DEBUG: OnSettingsChanged - Final serverUrl being used: '{serverUrl}'");
+		
 		this.modIntegrationService.InitializeHttpFileService(serverUrl);
 	}
 }
@@ -270,7 +275,13 @@ private void OnNetworkError(object? sender, string error)
 	if (this.modIntegrationService != null)
 	{
 		// Use the same server URL as the network service - it will proxy to file server
-		                        var serverUrl = settingsUI?.GetServerUrl() ?? "wss://stellar.kasu.network";
+		var serverUrl = settingsUI?.GetServerUrl() ?? "wss://stellar.kasu.network";
+		
+		// Debug logging to see what URL is being used
+		pluginLog?.Information($"DEBUG: SetModIntegrationService - settingsUI is null: {settingsUI == null}");
+		pluginLog?.Information($"DEBUG: SetModIntegrationService - GetServerUrl() returned: '{settingsUI?.GetServerUrl()}'");
+		pluginLog?.Information($"DEBUG: SetModIntegrationService - Final serverUrl being used: '{serverUrl}'");
+		
 		this.modIntegrationService.InitializeHttpFileService(serverUrl);
 		
 
@@ -332,6 +343,11 @@ public void SetPluginLog(IPluginLog pluginLog)
                 var serverUrl = settingsUI?.GetServerUrl() ?? "wss://stellar.kasu.network";
                 var testMode = settingsUI?.GetTestMode() ?? false;
                 
+                // Debug logging to see what URL is being used
+                pluginLog?.Information($"DEBUG: settingsUI is null: {settingsUI == null}");
+                pluginLog?.Information($"DEBUG: GetServerUrl() returned: '{settingsUI?.GetServerUrl()}'");
+                pluginLog?.Information($"DEBUG: Final serverUrl being used: '{serverUrl}'");
+                
                 // Update HttpFileService with the correct server URL
                 if (modIntegrationService != null)
                 {
@@ -360,7 +376,7 @@ public void SetPluginLog(IPluginLog pluginLog)
                     });
                 }
                 else
-{
+                {
 	// Get the player's character name and current zone
 	var characterName = GetPlayerCharacterName();
 	var currentZone = GetCurrentZone();
@@ -662,9 +678,9 @@ public void SetPluginLog(IPluginLog pluginLog)
         }
 
 private void HandleUsersList(dynamic usersData)
-{
-	try
-	{
+        {
+            try
+            {
 		onlineUsers.Clear();
 		if (usersData != null)
 		{
@@ -673,9 +689,9 @@ private void HandleUsersList(dynamic usersData)
 				onlineUsers.Add(user);
 			}
 		}
-	}
-	catch (Exception ex)
-	{
+            }
+            catch (Exception ex)
+            {
 		pluginLog?.Error($"Failed to handle users list: {ex.Message}");
 	}
 }
@@ -709,88 +725,70 @@ private void HandleUserCharacterData(dynamic data)
 				UpdateSyncProgress(userId, "Applying Glamourer data...", 0.3f);
 			}
 			
-			// Apply the received data to the source character (not local player)
-			if (characterData?.glamourer_data != null)
-			{
-				_ = Task.Run(async () => 
-				{
-					try
-					{
-						await modIntegrationService.ApplyGlamourerData(characterData.glamourer_data.ToString(), sourceCharacterName);
-						if (!string.IsNullOrEmpty(userId))
-						{
-							UpdateSyncProgress(userId, "Applying Penumbra meta...", 0.5f);
-						}
-					}
-					catch (Exception ex)
-					{
-						if (!string.IsNullOrEmpty(userId))
-						{
-							FailSyncProgress(userId, $"Glamourer error: {ex.Message}");
-						}
-					}
-				});
-			}
-			
-			if (characterData?.penumbra_meta != null)
-			{
-				_ = Task.Run(async () => 
-				{
-					try
-					{
-						await modIntegrationService.ApplyPenumbraMetaData(characterData.penumbra_meta.ToString(), sourceCharacterName);
-						if (!string.IsNullOrEmpty(userId))
-						{
-							UpdateSyncProgress(userId, "Downloading mod files...", 0.7f);
-						}
-					}
-					catch (Exception ex)
-					{
-						if (!string.IsNullOrEmpty(userId))
-						{
-							FailSyncProgress(userId, $"Penumbra meta error: {ex.Message}");
-						}
-					}
-				});
-			}
-			
-			// Handle Penumbra file metadata (fetch from HTTP and download files)
-			// Since we moved file metadata to HTTP, we need to fetch it from the source user
-			_ = Task.Run(async () => 
-			{
-				try
-				{
-					pluginLog?.Information($"Fetching file metadata for {sourceCharacterName} via HTTP...");
-					
-					// Get the source user ID from the top-level data object (not the nested character data)
-					var sourceUserId = GetSourceUserId(data);
-					if (!string.IsNullOrEmpty(sourceUserId))
-					{
-						// Download file metadata from HTTP server
-						var fileMetadata = await modIntegrationService.DownloadFileMetadataAsync(sourceUserId);
-						
-						if (fileMetadata != null && fileMetadata.Count > 0)
-						{
-							pluginLog?.Information($"Retrieved file metadata for {fileMetadata.Count} files from {sourceCharacterName}");
-							
-							// Download and apply the files
-							await DownloadAndApplyFilesAsync(fileMetadata, sourceCharacterName);
-						}
-						else
-						{
-							pluginLog?.Information($"No file metadata found for {sourceCharacterName}");
-						}
-					}
-					else
-					{
-						pluginLog?.Warning($"Could not determine source user ID for {sourceCharacterName}");
-					}
-				}
-				catch (Exception ex)
-				{
-					pluginLog?.Error($"Failed to fetch and apply file metadata: {ex.Message}");
-				}
-			});
+            // Apply the received data to the source character in a single, sequenced task
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    // 1) Glamourer
+                    if (characterData?.glamourer_data != null)
+                    {
+                        await modIntegrationService.ApplyGlamourerData(characterData.glamourer_data.ToString(), sourceCharacterName);
+                        if (!string.IsNullOrEmpty(userId))
+                        {
+                            UpdateSyncProgress(userId, "Applying Penumbra meta...", 0.5f);
+                        }
+                    }
+
+                    // 2) Penumbra meta
+                    if (characterData?.penumbra_meta != null)
+                    {
+                        await modIntegrationService.ApplyPenumbraMetaData(characterData.penumbra_meta.ToString(), sourceCharacterName);
+                        if (!string.IsNullOrEmpty(userId))
+                        {
+                            UpdateSyncProgress(userId, "Downloading mod files...", 0.7f);
+                        }
+                    }
+                    else
+                    {
+                        // No Penumbra metadata, skip to next step
+                        pluginLog?.Information($"No Penumbra metadata found for {sourceCharacterName}, skipping metadata application");
+                        if (!string.IsNullOrEmpty(userId))
+                        {
+                            UpdateSyncProgress(userId, "Downloading mod files...", 0.7f);
+                        }
+                    }
+
+                    // 3) Penumbra file metadata (fetch via HTTP), download and apply
+                    pluginLog?.Information($"Fetching file metadata for {sourceCharacterName} via HTTP...");
+                    var sourceUserId = GetSourceUserId(data);
+                    if (!string.IsNullOrEmpty(sourceUserId))
+                    {
+                        var fileMetadata = await modIntegrationService.DownloadFileMetadataAsync(sourceUserId);
+                        if (fileMetadata != null && fileMetadata.Count > 0)
+                        {
+                            pluginLog?.Information($"Retrieved file metadata for {fileMetadata.Count} files from {sourceCharacterName}");
+                            await DownloadAndApplyFilesAsync(fileMetadata, sourceCharacterName);
+                        }
+                        else
+                        {
+                            pluginLog?.Information($"No file metadata found for {sourceCharacterName}");
+                        }
+                    }
+                    else
+                    {
+                        pluginLog?.Warning($"Could not determine source user ID for {sourceCharacterName}");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    pluginLog?.Error($"Failed during sequenced character apply: {ex.Message}");
+                    if (!string.IsNullOrEmpty(userId))
+                    {
+                        FailSyncProgress(userId, $"Apply error: {ex.Message}");
+                    }
+                }
+            });
 			
 			pairResult = "Character data applied successfully!";
 		}
@@ -1233,10 +1231,10 @@ private string GetPlayerCharacterName()
 			// Get user ID for progress tracking
 			var userId = GetUserIdFromCharacterName(sourceCharacterName);
 			
-			pluginLog?.Information($"Starting download and application of {fileMetadata.Count} files from {sourceCharacterName}");
+			pluginLog?.Information($"Starting concurrent download and application of {fileMetadata.Count} files from {sourceCharacterName}");
 			
-			var downloadCount = 0;
-			var successCount = 0;
+			// First pass: parse file metadata and prepare download list
+			var downloadFiles = new List<(string hash, string relativePath)>();
 			
 			foreach (var kvp in fileMetadata)
 			{
@@ -1245,33 +1243,15 @@ private string GetPlayerCharacterName()
 					var fileKey = kvp.Key;
 					var fileInfo = kvp.Value;
 					
-					// Update progress for each file
-					if (!string.IsNullOrEmpty(userId))
-					{
-						var fileProgress = 0.7f + (0.2f * downloadCount / fileMetadata.Count);
-						UpdateSyncProgress(userId, $"Downloading {fileKey}...", fileProgress);
-					}
-					
-					// Debug: Log the file metadata format
-					pluginLog?.Information($"DEBUG: Processing file {fileKey}, type: {fileInfo?.GetType().Name}");
-					
-					// Debug: Log the full metadata structure for the first file
-					if (fileKey == kvp.Key && downloadCount == 0)
-					{
-						pluginLog?.Information($"DEBUG: Full metadata structure for {fileKey}: {Newtonsoft.Json.JsonConvert.SerializeObject(fileInfo, Newtonsoft.Json.Formatting.Indented)}");
-					}
-					
 					// Parse file metadata - handle both JObject and JsonElement
 					string? hash = null;
 					string? relativePath = null;
-					string? sizeBytes = null;
 					
 					if (fileInfo is Newtonsoft.Json.Linq.JObject fileInfoObj)
 					{
 						// Newtonsoft.Json format
 						hash = fileInfoObj["hash"]?.ToString();
 						relativePath = fileInfoObj["relative_path"]?.ToString();
-						sizeBytes = fileInfoObj["size_bytes"]?.ToString();
 					}
 					else if (fileInfo is System.Text.Json.JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Object)
 					{
@@ -1280,99 +1260,109 @@ private string GetPlayerCharacterName()
 							hash = hashElement.GetString();
 						if (jsonElement.TryGetProperty("relative_path", out var pathElement))
 							relativePath = pathElement.GetString();
-						if (jsonElement.TryGetProperty("size_bytes", out var sizeElement))
-						{
-							// Handle both string and number types for size_bytes
-							if (sizeElement.ValueKind == System.Text.Json.JsonValueKind.String)
-								sizeBytes = sizeElement.GetString();
-							else if (sizeElement.ValueKind == System.Text.Json.JsonValueKind.Number)
-								sizeBytes = sizeElement.GetInt64().ToString();
-						}
 					}
-					
-					pluginLog?.Information($"DEBUG: Parsed metadata - hash: {hash}, path: {relativePath}, size: {sizeBytes}");
 					
 					if (!string.IsNullOrEmpty(hash) && !string.IsNullOrEmpty(relativePath))
 					{
-						downloadCount++;
-						
-						// Download file from HTTP server
-						var downloadSuccess = await modIntegrationService.DownloadFileAsync(hash, relativePath);
-						
-						if (downloadSuccess)
-						{
-							successCount++;
-							pluginLog?.Information($"Successfully downloaded file: {relativePath}");
-						}
-						else
-						{
-							pluginLog?.Warning($"Failed to download file: {relativePath}");
-						}
+						downloadFiles.Add((hash, relativePath));
 					}
 					else
 					{
 						pluginLog?.Warning($"Invalid file metadata for {fileKey}: missing hash or relative_path");
-						pluginLog?.Information($"DEBUG: File metadata content: {Newtonsoft.Json.JsonConvert.SerializeObject(fileInfo, Newtonsoft.Json.Formatting.Indented)}");
 					}
 				}
 				catch (Exception ex)
 				{
-					pluginLog?.Error($"Error processing file {kvp.Key}: {ex.Message}");
+					pluginLog?.Error($"Failed to parse file metadata {kvp.Key}: {ex.Message}");
 				}
 			}
 			
-			pluginLog?.Information($"File download complete: {successCount}/{downloadCount} files downloaded successfully");
-			
-			// Apply the downloaded files to the received mods partition
-			if (successCount > 0)
+			// Second pass: download files concurrently
+			if (downloadFiles.Count > 0)
 			{
-				pluginLog?.Information($"Applying {successCount} downloaded files to received mods partition");
+				pluginLog?.Information($"Starting concurrent download of {downloadFiles.Count} files...");
 				
-				// Update progress for file application
-				if (!string.IsNullOrEmpty(userId))
+				var progress = new Progress<(int completed, int total, string currentFile)>(report =>
 				{
-					UpdateSyncProgress(userId, "Applying mod files...", 0.9f);
+					if (!string.IsNullOrEmpty(userId))
+					{
+						var fileProgress = 0.7f + (0.2f * report.completed / report.total);
+						UpdateSyncProgress(userId, $"Downloading {report.currentFile}...", fileProgress);
+					}
+					pluginLog?.Information($"Download progress: {report.completed}/{report.total} - {report.currentFile}");
+				});
+				
+				var downloadResult = await modIntegrationService.DownloadFilesConcurrentlyAsync(downloadFiles, maxConcurrency: 5, progress);
+				
+				pluginLog?.Information($"Concurrent download completed: {downloadResult.successCount} successful, {downloadResult.failureCount} failed");
+				
+				if (downloadResult.errors.Count > 0)
+				{
+					pluginLog?.Warning($"Download errors: {string.Join(", ", downloadResult.errors.Take(5))}");
 				}
 				
-				try
+				// Apply the downloaded files if any were successful
+				if (downloadResult.successCount > 0)
 				{
-					// Get the received mods directory path - use the same path as ModIntegrationService
-					var receivedModsPath = modIntegrationService?.GetReceivedModsDirectory();
-					if (string.IsNullOrEmpty(receivedModsPath))
+					pluginLog?.Information($"Applying {downloadResult.successCount} downloaded files to received mods partition");
+					
+					// Update progress for file application
+					if (!string.IsNullOrEmpty(userId))
 					{
-						pluginLog?.Error("Received mods path not configured");
-						if (!string.IsNullOrEmpty(userId))
-						{
-							FailSyncProgress(userId, "Received mods path not configured");
-						}
-						return;
+						UpdateSyncProgress(userId, "Applying mod files...", 0.9f);
 					}
 					
-					pluginLog?.Information($"Applying files to received mods directory: {receivedModsPath}");
-					pluginLog?.Information($"DEBUG: Using ModIntegrationService path: {receivedModsPath}");
-					
-					// Apply the downloaded files to Penumbra for the target character
-					var applyResult = await modIntegrationService.ApplyDownloadedFilesToPenumbraAsync(receivedModsPath, sourceCharacterName);
-					pluginLog?.Information($"File application result: {applyResult}");
-					
-					// Complete sync progress
+					try
+					{
+						// Get the received mods directory path - use the same path as ModIntegrationService
+						var receivedModsPath = modIntegrationService?.GetReceivedModsDirectory();
+						if (string.IsNullOrEmpty(receivedModsPath))
+						{
+							pluginLog?.Error("Received mods path not configured");
+							if (!string.IsNullOrEmpty(userId))
+							{
+								FailSyncProgress(userId, "Received mods path not configured");
+							}
+							return;
+						}
+						
+						pluginLog?.Information($"Applying {downloadResult.downloadedFilePaths.Count} specific downloaded files to received mods directory: {receivedModsPath}");
+						
+						// Apply ONLY the specific files that were just downloaded (this prevents applying old/corrupted files)
+						pluginLog?.Information($"CRITICAL: About to call ApplyDownloadedFilesToPenumbraAsync for character '{sourceCharacterName}'");
+						var applyResult = await modIntegrationService.ApplyDownloadedFilesToPenumbraAsync(receivedModsPath, sourceCharacterName, downloadResult.downloadedFilePaths);
+						pluginLog?.Information($"CRITICAL: ApplyDownloadedFilesToPenumbraAsync completed with result: {applyResult}");
+						pluginLog?.Information($"File application result: {applyResult}");
+						
+						// Complete sync progress
+						if (!string.IsNullOrEmpty(userId))
+						{
+							pluginLog?.Information($"CRITICAL: About to complete sync progress for user '{userId}'");
+							CompleteSyncProgress(userId);
+							pluginLog?.Information($"CRITICAL: Sync progress completed for user '{userId}'");
+						}
+					}
+					catch (Exception ex)
+					{
+						pluginLog?.Error($"Failed to apply downloaded files: {ex.Message}");
+						if (!string.IsNullOrEmpty(userId))
+						{
+							FailSyncProgress(userId, $"File application error: {ex.Message}");
+						}
+					}
+				}
+				else
+				{
+					// No files downloaded, but sync is complete
 					if (!string.IsNullOrEmpty(userId))
 					{
 						CompleteSyncProgress(userId);
 					}
 				}
-				catch (Exception ex)
-				{
-					pluginLog?.Error($"Failed to apply downloaded files: {ex.Message}");
-					if (!string.IsNullOrEmpty(userId))
-					{
-						FailSyncProgress(userId, $"File application error: {ex.Message}");
-					}
-				}
 			}
 			else
 			{
-				// No files downloaded, but sync is complete
+				pluginLog?.Warning($"No valid files found in metadata for {sourceCharacterName}");
 				if (!string.IsNullOrEmpty(userId))
 				{
 					CompleteSyncProgress(userId);
@@ -1615,6 +1605,5 @@ if (!string.IsNullOrEmpty(pairResult))
         }
     }
 }
-
 
 

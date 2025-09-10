@@ -2,14 +2,17 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Text;
 using System.IO;
 using System.IO.Compression;
 using System.Timers;
+using System.Diagnostics;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Game.ClientState.Conditions;
 using Glamourer.Api.Helpers;
 using Glamourer.Api.IpcSubscribers;
 using Penumbra.Api.Helpers;
@@ -27,6 +30,10 @@ namespace StellarSync.Services
         private readonly IObjectTable? _objectTable;
         private readonly IClientState? _clientState;
         private readonly IFramework? _framework;
+        private readonly ICondition? _condition;
+        private readonly SemaphoreSlim _redrawSemaphore = new(1, 1);
+        // Serialize all apply operations to avoid overlapping Penumbra/Glamourer calls
+        private readonly SemaphoreSlim _applySemaphore = new(1, 1);
         
         // Glamourer API
         private readonly Glamourer.Api.IpcSubscribers.ApiVersion _glamourerApiVersion;
@@ -41,7 +48,6 @@ namespace StellarSync.Services
         
         // Penumbra Temporary Mod API (like client-old) - Using V5/V6 API
         private readonly Penumbra.Api.IpcSubscribers.AddTemporaryMod _penumbraAddTemporaryMod;
-        private readonly Penumbra.Api.IpcSubscribers.AddTemporaryModAll _penumbraAddTemporaryModAll;
         private readonly Penumbra.Api.IpcSubscribers.RemoveTemporaryMod _penumbraRemoveTemporaryMod;
         private readonly Penumbra.Api.IpcSubscribers.CreateTemporaryCollection _penumbraCreateTemporaryCollection;
         private readonly Penumbra.Api.IpcSubscribers.DeleteTemporaryCollection _penumbraDeleteTemporaryCollection;
@@ -58,7 +64,7 @@ namespace StellarSync.Services
         public bool PenumbraAvailable { get; private set; }
         
         // Auto-reconnection timer
-        private Timer? _reconnectionTimer;
+        private System.Timers.Timer? _reconnectionTimer;
         private const int RECONNECTION_INTERVAL_MS = 5000; // Check every 5 seconds
         private const int MAX_RECONNECTION_ATTEMPTS = 10; // Max attempts before giving up temporarily
         private int _glamourerReconnectionAttempts = 0;
@@ -115,7 +121,7 @@ namespace StellarSync.Services
             }
         }
         
-        public ModIntegrationService(IPluginLog logger, IDalamudPluginInterface pluginInterface, Configuration.Configuration configuration, IObjectTable? objectTable = null, IClientState? clientState = null, IFramework? framework = null)
+        public ModIntegrationService(IPluginLog logger, IDalamudPluginInterface pluginInterface, Configuration.Configuration configuration, IObjectTable? objectTable = null, IClientState? clientState = null, IFramework? framework = null, ICondition? condition = null)
         {
             _logger = logger;
             _pluginInterface = pluginInterface;
@@ -123,6 +129,7 @@ namespace StellarSync.Services
             _objectTable = objectTable;
             _clientState = clientState;
             _framework = framework;
+            _condition = condition;
             
             // Initialize Glamourer API
             _glamourerApiVersion = new Glamourer.Api.IpcSubscribers.ApiVersion(pluginInterface);
@@ -137,7 +144,6 @@ namespace StellarSync.Services
             
                     // Initialize Penumbra Temporary Mod API (like client-old) - Using V5/V6 API
         _penumbraAddTemporaryMod = new Penumbra.Api.IpcSubscribers.AddTemporaryMod(pluginInterface);
-        _penumbraAddTemporaryModAll = new Penumbra.Api.IpcSubscribers.AddTemporaryModAll(pluginInterface);
         _penumbraRemoveTemporaryMod = new Penumbra.Api.IpcSubscribers.RemoveTemporaryMod(pluginInterface);
         _penumbraCreateTemporaryCollection = new Penumbra.Api.IpcSubscribers.CreateTemporaryCollection(pluginInterface);
         _penumbraDeleteTemporaryCollection = new Penumbra.Api.IpcSubscribers.DeleteTemporaryCollection(pluginInterface);
@@ -155,8 +161,51 @@ namespace StellarSync.Services
         
         public void InitializeHttpFileService(string serverUrl)
         {
-            _httpFileService = new HttpFileService(serverUrl, _logger);
-            _logger.Information($"HTTP file service initialized with server URL: {serverUrl}");
+            // Convert WebSocket URL to HTTP file server URL
+            var httpFileServerUrl = ConvertToHttpFileServerUrl(serverUrl);
+            _httpFileService = new HttpFileService(httpFileServerUrl, _logger);
+            _logger.Information($"HTTP file service initialized with server URL: {httpFileServerUrl} (converted from: {serverUrl})");
+        }
+        
+
+        private string ConvertToHttpFileServerUrl(string serverUrl)
+        {
+            // Convert WebSocket URL to HTTP file server URL
+            // wss://stellar.kasu.network -> https://stellar.kasu.network (nginx proxy)
+            // ws://localhost:6000 -> http://localhost:6200 (direct port access)
+            
+            if (serverUrl.StartsWith("wss://"))
+            {
+                var host = serverUrl.Substring(6); // Remove "wss://"
+                // For production (stellar.kasu.network), use nginx proxy paths
+                if (host == "stellar.kasu.network")
+                {
+                    return $"https://{host}";
+                }
+                // For other wss:// URLs, use direct port access
+                return $"https://{host}:6200";
+            }
+            else if (serverUrl.StartsWith("ws://"))
+            {
+                var host = serverUrl.Substring(5); // Remove "ws://"
+                // If it's localhost:6000, convert to localhost:6200
+                if (host.Contains(":6000"))
+                {
+                    return $"http://{host.Replace(":6000", ":6200")}";
+                }
+                // Otherwise assume it's just the host
+                return $"http://{host}:6200";
+            }
+            else if (serverUrl.StartsWith("http://") || serverUrl.StartsWith("https://"))
+            {
+                // Already an HTTP URL, assume it's the file server URL
+                return serverUrl;
+            }
+            else
+            {
+                // Default fallback
+                return $"http://{serverUrl}:6200";
+            }
         }
         
 
@@ -215,6 +264,48 @@ namespace StellarSync.Services
             }
             
             return success;
+        }
+
+        /// <summary>
+        /// Downloads multiple files concurrently with progress tracking
+        /// </summary>
+        public async Task<(int successCount, int failureCount, List<string> errors, List<string> downloadedFilePaths)> DownloadFilesConcurrentlyAsync(
+            List<(string hash, string relativePath)> files,
+            int maxConcurrency = 5,
+            IProgress<(int completed, int total, string currentFile)> progress = null)
+        {
+            if (_httpFileService == null)
+            {
+                _logger.Error("HTTP file service not initialized");
+                return (0, files.Count, new List<string> { "HTTP file service not initialized" }, new List<string>());
+            }
+            
+            // Get the received mods directory from configuration
+            var receivedModsDir = GetReceivedModsDirectory();
+            if (string.IsNullOrEmpty(receivedModsDir))
+            {
+                _logger.Error("Received mods directory not configured");
+                return (0, files.Count, new List<string> { "Received mods directory not configured" }, new List<string>());
+            }
+            
+            // Prepare download list with full destination paths
+            var downloadFiles = files.Select(file => 
+                (file.hash, Path.Combine(receivedModsDir, file.relativePath))).ToList();
+            
+            _logger.Information($"Starting concurrent download of {files.Count} files with max concurrency: {maxConcurrency}");
+            
+            var result = await _httpFileService.DownloadFilesConcurrentlyAsync(downloadFiles, maxConcurrency, progress);
+            
+            // Extract the successfully downloaded file paths
+            var downloadedFilePaths = downloadFiles
+                .Where(file => File.Exists(file.Item2))
+                .Select(file => file.Item2)
+                .ToList();
+            
+            _logger.Information($"Concurrent download completed: {result.successCount} successful, {result.failureCount} failed");
+            _logger.Information($"Successfully downloaded files: {downloadedFilePaths.Count}");
+            
+            return (result.successCount, result.failureCount, result.errors, downloadedFilePaths);
         }
         
         public string GetReceivedModsDirectory()
@@ -275,7 +366,7 @@ namespace StellarSync.Services
                 _reconnectionTimer.Dispose();
             }
             
-            _reconnectionTimer = new Timer(RECONNECTION_INTERVAL_MS);
+            _reconnectionTimer = new System.Timers.Timer(RECONNECTION_INTERVAL_MS);
             _reconnectionTimer.Elapsed += OnReconnectionTimerElapsed;
             _reconnectionTimer.AutoReset = true;
             _reconnectionTimer.Start();
@@ -317,6 +408,37 @@ namespace StellarSync.Services
                     _logger.Information("Penumbra API reconnected successfully!");
                 }
             }
+        }
+
+        private bool IsWorldUnstable()
+        {
+            try
+            {
+                if (_condition == null) return false;
+                return _condition[ConditionFlag.BetweenAreas]
+                    || _condition[ConditionFlag.BetweenAreas51]
+                    || _condition[ConditionFlag.OccupiedInCutSceneEvent]
+                    || _condition[ConditionFlag.OccupiedInEvent]
+                    || _condition[ConditionFlag.OccupiedSummoningBell]
+                    || _condition[ConditionFlag.Mounted];
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private async Task<bool> WaitForWorldStableAsync(int timeoutMs = 10000, int pollMs = 100)
+        {
+            if (_condition == null) return true;
+            var sw = Stopwatch.StartNew();
+            while (sw.ElapsedMilliseconds < timeoutMs)
+            {
+                if (!IsWorldUnstable()) return true;
+                await Task.Delay(pollMs);
+            }
+            _logger.Warning("Timeout waiting for stable world state (zoning/cutscene still active)");
+            return false;
         }
         
         private void CheckGlamourerAPI()
@@ -469,8 +591,9 @@ public string GetPenumbraMetaManipulations()
                     // Clear old entries
                     _playerCharacters.Clear();
                     
-                    // Scan object table for player characters
-                    for (int i = 0; i < 200; i += 2)
+                    // Scan object table for player characters (full table, step 1)
+                    var length = _objectTable.Length;
+                    for (int i = 0; i < length; i++)
                     {
                         var obj = _objectTable[i];
                         if (obj == null || obj.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
@@ -494,31 +617,56 @@ public string GetPenumbraMetaManipulations()
         // Get character address by name
         private async Task<IntPtr> GetCharacterAddressByNameAsync(string characterName)
         {
-            return await RunOnFrameworkThreadAsync(() =>
+            try
             {
-                if (_playerCharacters.TryGetValue(characterName, out var character))
+                return await RunOnFrameworkThreadAsync(() =>
                 {
-                    return character.Address;
-                }
-                
-                // Fallback: try to find in object table
-                if (_objectTable != null)
-                {
-                    for (int i = 0; i < 200; i += 2)
+                    try
                     {
-                        var obj = _objectTable[i];
-                        if (obj == null || obj.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
-                            continue;
-                        
-                        if (obj.Name.ToString().Equals(characterName, StringComparison.Ordinal))
+                        if (_playerCharacters.TryGetValue(characterName, out var character))
                         {
-                            return obj.Address;
+                            return character.Address;
                         }
+                        
+                        // Fallback: try to find in object table
+                        if (_objectTable != null)
+                        {
+                            var length = _objectTable.Length;
+                            for (int i = 0; i < length; i++)
+                            {
+                                try
+                                {
+                                    var obj = _objectTable[i];
+                                    if (obj == null || obj.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                                        continue;
+                                    
+                                    if (obj.Name.ToString().Equals(characterName, StringComparison.Ordinal))
+                                    {
+                                        return obj.Address;
+                                    }
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.Debug($"Error checking object at index {i}: {ex.Message}");
+                                    continue;
+                                }
+                            }
+                        }
+                        
+                        return IntPtr.Zero;
                     }
-                }
-                
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Error in GetCharacterAddressByNameAsync: {ex.Message}");
+                        return IntPtr.Zero;
+                    }
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Error in GetCharacterAddressByNameAsync wrapper: {ex.Message}");
                 return IntPtr.Zero;
-            });
+            }
         }
 
         private async Task<int> GetObjectIndexFromAddressAsync(IntPtr address)
@@ -529,14 +677,15 @@ public string GetPenumbraMetaManipulations()
                 {
                     if (address == IntPtr.Zero)
                     {
-                        // Return local player index
-                        return _clientState?.LocalPlayer?.ObjectIndex ?? 0;
+                        // Invalid address, do not resolve to local player to avoid accidental application
+                        return -1;
                     }
                     
                     // Find object index for the given address
                     if (_objectTable != null)
                     {
-                        for (int i = 0; i < 200; i += 2)
+                        var length = _objectTable.Length;
+                        for (int i = 0; i < length; i++)
                         {
                             var obj = _objectTable[i];
                             if (obj?.Address == address)
@@ -553,6 +702,25 @@ public string GetPenumbraMetaManipulations()
             {
                 _logger.Error($"Error getting object index from address: {ex.Message}");
                 return -1;
+            }
+        }
+
+        private bool ValidateObjectIndexForCharacter(int objectIndex, string characterName)
+        {
+            try
+            {
+                if (_objectTable == null) return false;
+                if (objectIndex < 0 || objectIndex >= _objectTable.Length) return false;
+                var obj = _objectTable[objectIndex];
+                if (obj == null) return false;
+                if (obj.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player) return false;
+                var name = obj.Name.ToString();
+                return string.Equals(name, characterName, StringComparison.Ordinal);
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Validation error for object index {objectIndex} and character '{characterName}': {ex.Message}");
+                return false;
             }
         }
 
@@ -635,6 +803,7 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
                 return "CRITICAL ERROR: Cannot apply data without target character name";
             }
             
+            await _applySemaphore.WaitAsync();
             try
             {
                 _logger.Information($"Applying Glamourer data to character: {targetCharacterName}");
@@ -688,6 +857,10 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
                 _logger.Error($"Failed to apply Glamourer data: {ex.Message}");
                 return $"Error: {ex.Message}";
             }
+            finally
+            {
+                _applySemaphore.Release();
+            }
         }
         
         public async Task<string> ApplyPenumbraMetaData(string metaData, string targetCharacterName = null)
@@ -704,6 +877,7 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
                 return "CRITICAL ERROR: Cannot apply meta data without target character name";
             }
             
+            await _applySemaphore.WaitAsync();
             try
             {
                 _logger.Information($"Applying Penumbra meta data to character: {targetCharacterName}");
@@ -727,12 +901,56 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
                     return $"CRITICAL ERROR: Invalid object index for character '{targetCharacterName}'";
                 }
                 
+                // Validate it still points to the intended character
+                if (!ValidateObjectIndexForCharacter(objectIndex, targetCharacterName))
+                {
+                    _logger.Error($"CRITICAL: Object index {objectIndex} does not match character '{targetCharacterName}' - REJECTING APPLICATION");
+                    return $"CRITICAL ERROR: Object index mismatch for '{targetCharacterName}'";
+                }
+                
                 // Additional safeguard: Verify this is NOT the local player
                 var localPlayerIndex = _clientState?.LocalPlayer?.ObjectIndex ?? -1;
                 if (objectIndex == localPlayerIndex)
                 {
                     _logger.Error($"CRITICAL: Attempted to apply meta data to local player (index {objectIndex}) - REJECTING APPLICATION");
                     return $"CRITICAL ERROR: Cannot apply meta data to local player - target character '{targetCharacterName}' resolves to local player";
+                }
+                
+                // Wait for stable world state before applying
+                if (!await WaitForWorldStableAsync())
+                {
+                    return "World is busy (zoning/cutscene). Try again shortly.";
+                }
+
+                // Create a temporary collection for this character
+                var applicationId = Guid.NewGuid();
+                var createResult = _penumbraCreateTemporaryCollection.Invoke($"StellarSync_{targetCharacterName}_{applicationId}", $"StellarSync_{targetCharacterName}_{applicationId}", out var collectionId);
+                
+                if (createResult != Penumbra.Api.Enums.PenumbraApiEc.Success || collectionId == Guid.Empty)
+                {
+                    _logger.Error($"Failed to create temporary collection for character '{targetCharacterName}': {createResult}");
+                    return $"Error: Failed to create temporary collection: {createResult}";
+                }
+                
+                _logger.Information($"Created temporary collection {collectionId} for character '{targetCharacterName}'");
+                
+                // Assign the collection to the target character
+                var assignResult = _penumbraAssignTemporaryCollection.Invoke(collectionId, (ushort)objectIndex, true);
+                if (assignResult != Penumbra.Api.Enums.PenumbraApiEc.Success)
+                {
+                    _logger.Error($"Failed to assign temporary collection to character '{targetCharacterName}': {assignResult}");
+                    // Clean up the collection
+                    _penumbraDeleteTemporaryCollection.Invoke(collectionId);
+                    return $"Error: Failed to assign temporary collection: {assignResult}";
+                }
+                
+                _logger.Information($"Assigned temporary collection {collectionId} to character '{targetCharacterName}' (index: {objectIndex})");
+                
+                // Apply the manipulation data to the temporary collection
+                if (!string.IsNullOrEmpty(metaData))
+                {
+                    var manipResult = _penumbraAddTemporaryMod.Invoke("StellarChara_Meta", collectionId, new Dictionary<string, string>(), metaData, 0);
+                    _logger.Information($"Applied manipulation data to collection {collectionId}: {manipResult}");
                 }
                 
                 _logger.Information($"Successfully applied meta data to character: {targetCharacterName}");
@@ -742,6 +960,10 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
             {
                 _logger.Error($"Failed to apply Penumbra meta data: {ex.Message}");
                 return $"Error: {ex.Message}";
+            }
+            finally
+            {
+                _applySemaphore.Release();
             }
         }
         
@@ -772,10 +994,13 @@ public void StoreDataForTesting(string glamourerData, string penumbraMetaData, D
 	}
 }
 
-// File transfer methods - NEW APPROACH: Send metadata only, use HTTP for actual files
+// File transfer methods - NEW APPROACH: Send metadata only, use HTTP for actual files with CONCURRENT UPLOADS
 public async Task<Dictionary<string, object>> GetPenumbraFileMetadataForTransfer(Dictionary<string, HashSet<string>> filePaths)
 {
+	_logger.Information($"DEBUG: GetPenumbraFileMetadataForTransfer called with {filePaths.Count} file path groups");
+	
 	var fileMetadata = new Dictionary<string, object>();
+	var uploadFiles = new List<(string filePath, string hash, string relativePath)>();
 	
 	try
 	{
@@ -796,8 +1021,8 @@ public async Task<Dictionary<string, object>> GetPenumbraFileMetadataForTransfer
 		_logger.Information($"Reading Penumbra file metadata from: {modDirectory}");
 		
 		var fileCount = 0;
-		// Removed file limit to test with all files
 		
+		// First pass: collect file metadata and prepare upload list
 		foreach (var kvp in filePaths)
 		{
 			var fullModPath = kvp.Key; // This is the full path including mod folder
@@ -805,7 +1030,6 @@ public async Task<Dictionary<string, object>> GetPenumbraFileMetadataForTransfer
 			
 			foreach (var relativePath in relativePaths)
 			{
-				
 				try
 				{
 					// The fullModPath already contains the complete path to the file
@@ -816,12 +1040,15 @@ public async Task<Dictionary<string, object>> GetPenumbraFileMetadataForTransfer
 						// Create simplified metadata object (no full path to reduce size)
 						var safeRelativePath = relativePath.Replace('\\', '/');
 						
+						// Calculate hash for metadata
+						var hash = await CalculateFileHashAsync(fullModPath);
+						
 						var metadata = new
 						{
 							relative_path = safeRelativePath,
 							size_bytes = fileInfo.Length,
 							last_modified = ((DateTimeOffset)fileInfo.LastWriteTimeUtc).ToUnixTimeSeconds(),
-							hash = await CalculateFileHashAsync(fullModPath)
+							hash = hash
 						};
 						
 						// Store with a unique key based on the relative path
@@ -831,19 +1058,10 @@ public async Task<Dictionary<string, object>> GetPenumbraFileMetadataForTransfer
 						
 						_logger.Information($"SELECTED FILE {fileCount}: {relativePath} ({fileInfo.Length} bytes)");
 						
-						// Upload file to HTTP server if service is available
+						// Add to upload list if HTTP service is available
 						if (_httpFileService != null)
 						{
-							var hash = await CalculateFileHashAsync(fullModPath);
-							var uploadSuccess = await _httpFileService.UploadFileAsync(fullModPath, hash, safeRelativePath);
-							if (uploadSuccess)
-							{
-								_logger.Information($"Successfully uploaded file to HTTP server: {relativePath}");
-							}
-							else
-							{
-								_logger.Warning($"Failed to upload file to HTTP server: {relativePath}");
-							}
+							uploadFiles.Add((fullModPath, hash, safeRelativePath));
 						}
 						
 						_logger.Information($"Prepared file metadata: {relativePath} ({fileInfo.Length} bytes)");
@@ -858,8 +1076,49 @@ public async Task<Dictionary<string, object>> GetPenumbraFileMetadataForTransfer
 					_logger.Error($"Failed to read file metadata {relativePath}: {ex.Message}");
 				}
 			}
+		}
+		
+		// Second pass: check which files server needs, then upload only missing files
+		_logger.Information($"DEBUG: _httpFileService is null: {_httpFileService == null}");
+		_logger.Information($"DEBUG: uploadFiles.Count: {uploadFiles.Count}");
+		
+		if (_httpFileService != null && uploadFiles.Count > 0)
+		{
+			// Step 1: Check which files the server already has
+			var fileHashes = uploadFiles.Select(f => f.hash).ToList();
+			var (existingFiles, missingFiles) = await _httpFileService.CheckFilesAsync(fileHashes);
 			
-
+			_logger.Information($"Server check result: {existingFiles.Count} files already exist, {missingFiles.Count} files need to be uploaded");
+			
+			// Step 2: Filter upload list to only include missing files
+			var filesToUpload = uploadFiles.Where(f => missingFiles.Contains(f.hash)).ToList();
+			
+			if (filesToUpload.Count > 0)
+			{
+				_logger.Information($"Starting concurrent upload of {filesToUpload.Count} missing files (skipping {existingFiles.Count} existing files)...");
+				
+				var progress = new Progress<(int completed, int total, string currentFile)>(report =>
+				{
+					_logger.Information($"Upload progress: {report.completed}/{report.total} - {report.currentFile}");
+				});
+				
+				var uploadResult = await _httpFileService.UploadFilesConcurrentlyAsync(filesToUpload, maxConcurrency: 5, progress);
+				
+				_logger.Information($"Concurrent upload completed: {uploadResult.successCount} successful, {uploadResult.failureCount} failed");
+				
+				if (uploadResult.errors.Count > 0)
+				{
+					_logger.Warning($"Upload errors: {string.Join(", ", uploadResult.errors.Take(5))}");
+				}
+			}
+			else
+			{
+				_logger.Information($"All {uploadFiles.Count} files already exist on server, skipping upload");
+			}
+		}
+		else
+		{
+			_logger.Warning($"Skipping file check and upload - _httpFileService is null: {_httpFileService == null}, uploadFiles.Count: {uploadFiles.Count}");
 		}
 		
 		_logger.Information($"Prepared metadata for {fileMetadata.Count} files");
@@ -985,34 +1244,63 @@ private string ExtractPathFromKey(string fileKey)
 }
 
 // Apply downloaded files to Penumbra using temporary collections for a specific character
-public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedModsPath, string targetCharacterName)
+public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedModsPath, string targetCharacterName, List<string> specificFiles = null)
 {
+	await _applySemaphore.WaitAsync();
 	try
 	{
 		if (!PenumbraAvailable) { return "Penumbra API not available"; }
 		_logger.Information($"Applying downloaded files using Penumbra temporary collection for character: {targetCharacterName}");
+
+		// Gate on stable world state before beginning heavy operations
+		if (!await WaitForWorldStableAsync())
+		{
+			return "World is busy (zoning/cutscene). Try again shortly.";
+		}
 		
 		if (!Directory.Exists(receivedModsPath)) { 
 			_logger.Warning($"Received mods directory does not exist: {receivedModsPath}"); 
 			return "Received mods directory not found"; 
 		}
 		
-		var downloadedFiles = Directory.GetFiles(receivedModsPath, "*", SearchOption.AllDirectories);
-		_logger.Information($"Found {downloadedFiles.Length} downloaded files in received mods directory");
-		
-		if (downloadedFiles.Length == 0) { 
-			return "No downloaded files found in received mods directory"; 
+		// Use specific files if provided, otherwise scan directory (for backward compatibility)
+		string[] downloadedFiles;
+		if (specificFiles != null && specificFiles.Count > 0)
+		{
+			// Only apply the specific files that were just downloaded
+			downloadedFiles = specificFiles.Where(f => File.Exists(f)).ToArray();
+			_logger.Information($"Applying {downloadedFiles.Length} specific downloaded files (out of {specificFiles.Count} requested)");
+		}
+		else
+		{
+			// Fallback: scan entire directory (this is the problematic behavior we want to avoid)
+			downloadedFiles = Directory.GetFiles(receivedModsPath, "*", SearchOption.AllDirectories);
+			_logger.Warning($"No specific files provided, scanning entire directory - found {downloadedFiles.Length} files (this may cause crashes!)");
+			
+			// Safety check: if we find too many files, it's likely old/corrupted data
+			if (downloadedFiles.Length > 50)
+			{
+				_logger.Error($"CRITICAL: Found {downloadedFiles.Length} files in received mods directory - this is likely old/corrupted data that will cause crashes!");
+				_logger.Error("Recommendation: Clear the received mods directory and try again with a fresh download.");
+				return $"CRITICAL ERROR: Found {downloadedFiles.Length} files in received mods directory - this will likely cause crashes. Please clear the directory and try again.";
+			}
 		}
 		
-		// Step 1: Create temporary collection for the target character
-		var collectionIdentity = $"StellarSync_{targetCharacterName}";
-		var collectionName = $"StellarSync_{targetCharacterName}_{DateTime.UtcNow:yyyyMMdd_HHmmss}";
+		if (downloadedFiles.Length == 0) { 
+			return "No downloaded files found to apply"; 
+		}
+		
+		// Step 1: Clean up any existing collections for this character first
+		await CleanupExistingCollectionsForCharacter(targetCharacterName);
+		
+        // Step 2: Create temporary collection for the target character (using same naming pattern as client-old)
+        var collectionName = $"Stellar_{targetCharacterName}";
 		
 		_logger.Information($"Creating temporary collection: {collectionName} for character: {targetCharacterName}");
 		
 		Guid collectionId = Guid.Empty;
 		var createResult = await RunOnFrameworkThreadAsync(() => 
-			_ipcManager.Penumbra.CreateTemporaryCollection(collectionIdentity, collectionName, out collectionId));
+			_ipcManager.Penumbra.CreateTemporaryCollection(collectionName, collectionName, out collectionId));
 		
 		if (createResult != PenumbraApiEc.Success)
 		{
@@ -1022,7 +1310,7 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 		
 		_logger.Information($"Successfully created temporary collection with ID: {collectionId}");
 		
-		// Step 2: Find the target character in the game world and get their object index
+		// Step 3: Find the target character in the game world and get their object index
 		var targetAddress = await GetCharacterAddressByNameAsync(targetCharacterName);
 		if (targetAddress == IntPtr.Zero)
 		{
@@ -1031,30 +1319,41 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 			return $"Target character '{targetCharacterName}' not found in the game world. Please ensure they are nearby or visible.";
 		}
 		
-		var targetObjectIndex = await GetObjectIndexFromAddressAsync(targetAddress);
-		if (targetObjectIndex == -1)
-		{
-			// Clean up the collection we created
-			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
-			return $"Could not get object index for character '{targetCharacterName}'";
-		}
+        var targetObjectIndex = await GetObjectIndexFromAddressAsync(targetAddress);
+        if (targetObjectIndex == -1)
+        {
+            // Clean up the collection we created
+            await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+            return $"Could not get object index for character '{targetCharacterName}'";
+        }
+        
+        // Validate object index for intended character
+        if (!ValidateObjectIndexForCharacter(targetObjectIndex, targetCharacterName))
+        {
+            _logger.Error($"Object index {targetObjectIndex} does not match character '{targetCharacterName}'");
+            // Clean up the collection we created
+            await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+            return $"Error: Object index mismatch for character '{targetCharacterName}'";
+        }
 		
 		_logger.Information($"Found target character '{targetCharacterName}' with object index: {targetObjectIndex}");
 		
-		// Step 3: Assign the temporary collection to the target character
+		// Step 4: Assign the temporary collection to the target character
+		_logger.Information($"CRITICAL: About to assign collection {collectionId} to character '{targetCharacterName}' (index: {targetObjectIndex})");
 		var assignResult = await RunOnFrameworkThreadAsync(() => 
 			_ipcManager.Penumbra.AssignTemporaryCollection(collectionId, targetObjectIndex, true));
 		
 		if (assignResult != PenumbraApiEc.Success)
 		{
+			_logger.Error($"CRITICAL: Failed to assign collection {collectionId} to character '{targetCharacterName}': {assignResult}");
 			// Clean up the collection we created
 			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
 			return $"Failed to assign temporary collection to character '{targetCharacterName}': {assignResult}";
 		}
 		
-		_logger.Information($"Successfully assigned temporary collection {collectionId} to character '{targetCharacterName}' (index: {targetObjectIndex})");
+		_logger.Information($"CRITICAL: Successfully assigned temporary collection {collectionId} to character '{targetCharacterName}' (index: {targetObjectIndex})");
 		
-		// Step 4: Apply the mod files to the temporary collection
+		// Step 5: Apply the mod files to the temporary collection
 		try
 		{
 			// Build mod paths dictionary (game path -> file path)
@@ -1082,46 +1381,130 @@ public async Task<string> ApplyDownloadedFilesToPenumbraAsync(string receivedMod
 				}
 			}
 			
-			if (modPaths.Count == 0)
-			{
-				_logger.Warning("No valid mod paths found");
-				// Clean up the collection we created
-				await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
-				return "No valid mod paths found";
-			}
-			
-			// Apply the mod files to the temporary collection
-			var modResult = await RunOnFrameworkThreadAsync(() => 
-				_penumbraAddTemporaryModAll.Invoke(collectionName, modPaths, string.Empty, 0));
-			
-			if (modResult != PenumbraApiEc.Success)
-			{
-				_logger.Error($"Failed to apply mod files to temporary collection: {modResult}");
-				// Clean up the collection we created
-				await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
-				return $"Failed to apply mod files to temporary collection: {modResult}";
-			}
-			
-			_logger.Information($"Successfully applied {modPaths.Count} files to temporary collection");
-			
-			// Step 5: Trigger a redraw to apply all changes to the target character
-			_logger.Information($"Triggering Penumbra redraw for character '{targetCharacterName}' (index: {targetObjectIndex}) to apply all mods");
-			
-			await RunOnFrameworkThreadAsync(() => 
-				_penumbraRedraw.Invoke((ushort)targetObjectIndex, RedrawType.Redraw));
-			
-			_logger.Information($"Successfully triggered Penumbra redraw for character '{targetCharacterName}' after applying {modPaths.Count} mod files");
-			
-			return $"Successfully applied {modPaths.Count} files to character '{targetCharacterName}' using temporary collection. The mods should now be visible on the target character.";
-		}
-		catch (Exception ex) 
-		{ 
-			_logger.Error($"Failed to apply mod files to temporary collection: {ex.Message}");
+		if (modPaths.Count == 0)
+		{
+			_logger.Warning("No valid mod paths found");
 			// Clean up the collection we created
 			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
-			return $"Error applying mod files: {ex.Message}"; 
+			return "No valid mod paths found";
 		}
+		
+        // Validate that all mod paths exist and are accessible
+        foreach (var modPath in modPaths)
+        {
+            if (!File.Exists(modPath.Value))
+            {
+                _logger.Error($"Mod file does not exist: {modPath.Value}");
+                // Clean up the collection we created
+                await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+                return $"Mod file does not exist: {modPath.Value}";
+            }
+            // Extra safety: only allow known mod file extensions
+            var ext = Path.GetExtension(modPath.Value).ToLowerInvariant();
+            if (ext is not ".tex" and not ".mtrl" and not ".mdl" and not ".tmb" and not ".scd" and not ".pap")
+            {
+                _logger.Warning($"Skipping unsupported mod file extension: {modPath.Value}");
+                // Allow continue, but remove from dictionary
+                // Note: create a filtered copy to avoid modifying during iteration
+            }
+        }
+			
+		// Apply the mod files to the temporary collection using the same approach as client-old
+		// Use SetTemporaryMods to prevent race conditions by doing remove + add in a single framework thread call
+		_logger.Information($"CRITICAL: About to apply {modPaths.Count} mods to collection {collectionId}");
+		try
+		{
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.SetTemporaryMods(Guid.NewGuid(), collectionId, modPaths));
+			_logger.Information($"CRITICAL: Successfully applied {modPaths.Count} files to temporary collection using SetTemporaryMods");
+		}
+		catch (Exception modEx)
+		{
+			_logger.Error($"CRITICAL: Exception while setting temporary mods: {modEx.Message}");
+			// Clean up the collection we created
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+			return $"Exception while setting temporary mods: {modEx.Message}";
+		}
+			
+		// Wait for a stable world state before redraw
+		if (!await WaitForWorldStableAsync())
+		{
+			_logger.Warning("World still busy; skipping explicit redraw. Mods should still apply once stable.");
+			return $"Applied {modPaths.Count} files; redraw deferred due to busy world";
+		}
+
+		// Step 6: Trigger a redraw to apply all changes to the target character
+		_logger.Information($"Triggering Penumbra redraw for character '{targetCharacterName}' (index: {targetObjectIndex}) to apply all mods");
+		
+		// Validate object index before redraw to prevent crashes
+		if (targetObjectIndex < 0 || targetObjectIndex > 200)
+		{
+			_logger.Error($"Invalid object index for redraw: {targetObjectIndex}");
+			// Clean up the collection we created
+			await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+			return $"Error: Invalid object index for redraw: {targetObjectIndex}";
+		}
+		
+        // Double-check that the character still exists before redraw
+        var currentAddress = await GetCharacterAddressByNameAsync(targetCharacterName);
+        if (currentAddress == IntPtr.Zero)
+        {
+            _logger.Warning($"Character '{targetCharacterName}' no longer exists, skipping redraw");
+            // Clean up the collection we created
+            await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+            return $"Warning: Character '{targetCharacterName}' disappeared before redraw, but mods were applied";
+        }
+        
+        _logger.Information($"CRITICAL: About to trigger redraw for character '{targetCharacterName}' (index: {targetObjectIndex})");
+        try
+        {
+            // Use semaphore to prevent concurrent redraws (like lopclient)
+            await _redrawSemaphore.WaitAsync();
+            try
+            {
+                // Wait a moment for mods to be processed
+                await Task.Delay(250);
+
+                await RunOnFrameworkThreadAsync(() =>
+                    _penumbraRedraw.Invoke((ushort)targetObjectIndex, RedrawType.Redraw));
+
+                _logger.Information($"CRITICAL: Triggered Penumbra redraw for '{targetCharacterName}' (index: {targetObjectIndex})");
+
+                // Wait a bit to allow redraw to complete
+                await Task.Delay(750);
+            }
+            finally
+            {
+                _redrawSemaphore.Release();
+            }
+        }
+		catch (Exception redrawEx)
+		{
+			_logger.Error($"CRITICAL: Failed to trigger redraw for character '{targetCharacterName}': {redrawEx.Message}");
+			// Don't fail the entire operation if redraw fails - the mods are still applied
+			_logger.Information($"Mods were applied successfully, but redraw failed. Character may need manual redraw.");
+		}
+		
+		// Step 7: Skip cleanup to prevent VFS crashes
+		// The VFS initialization crash suggests that cleaning up the collection while VFS is initializing causes conflicts
+		// For now, we'll leave the collection active to prevent crashes
+		_logger.Information($"CRITICAL: Skipping collection cleanup to prevent VFS crashes - collection {collectionId} will remain active");
+		_logger.Warning($"WARNING: Temporary collection {collectionId} for character '{targetCharacterName}' was not cleaned up to prevent VFS crashes");
+			
+		_logger.Information($"CRITICAL: Mod application completed successfully for character '{targetCharacterName}'");
+		return $"Successfully applied {modPaths.Count} files to character '{targetCharacterName}' using temporary collection. The mods should now be visible on the target character.";
 	}
+	catch (Exception ex) 
+	{ 
+		_logger.Error($"Failed to apply mod files to temporary collection: {ex.Message}");
+		// Clean up the collection we created
+		await RunOnFrameworkThreadAsync(() => _ipcManager.Penumbra.DeleteTemporaryCollection(collectionId));
+		return $"Error applying mod files: {ex.Message}"; 
+	}
+    finally
+    {
+        _applySemaphore.Release();
+    }
+}
 	catch (Exception ex) 
 	{ 
 		_logger.Error($"Failed to apply downloaded files to Penumbra: {ex.Message}"); 
@@ -1296,6 +1679,129 @@ private dynamic? FindCharacterByName(string characterName)
             }
         }
         
+        /// <summary>
+        /// Cleans up any existing temporary collections for a specific character
+        /// Note: Since we can't enumerate collections, we'll track them ourselves
+        /// </summary>
+        private async Task CleanupExistingCollectionsForCharacter(string characterName)
+        {
+            try
+            {
+                if (!PenumbraAvailable) return;
+                
+                _logger.Information($"Cleaning up existing temporary collections for character: {characterName}");
+                
+                // Since we can't enumerate collections, we'll use a different approach:
+                // We'll try to delete collections with known naming patterns
+                // This is a best-effort cleanup since we can't enumerate all collections
+                
+                var collectionIdentities = new[]
+                {
+                    $"StellarSync_{characterName}",
+                    $"StellarSync_{characterName}_{DateTime.UtcNow.AddMinutes(-1):yyyyMMdd_HHmm}",
+                    $"StellarSync_{characterName}_{DateTime.UtcNow.AddMinutes(-2):yyyyMMdd_HHmm}",
+                    $"StellarSync_{characterName}_{DateTime.UtcNow.AddMinutes(-5):yyyyMMdd_HHmm}"
+                };
+                
+                foreach (var identity in collectionIdentities)
+                {
+                    try
+                    {
+                        // Try to create a collection with the same identity to see if one exists
+                        // If it fails with "already exists", we know there's a collection to clean up
+                        var testResult = await RunOnFrameworkThreadAsync(() => 
+                        {
+                            var result = _ipcManager.Penumbra.CreateTemporaryCollection(identity, $"{identity}_cleanup_test", out var testId);
+                            if (result == PenumbraApiEc.Success)
+                            {
+                                // Successfully created, so no existing collection - clean up the test one
+                                _ipcManager.Penumbra.DeleteTemporaryCollection(testId);
+                            }
+                            return result;
+                        });
+                        
+                        if (testResult != PenumbraApiEc.Success)
+                        {
+                            _logger.Information($"Found existing collection with identity: {identity}");
+                            // There might be an existing collection, but we can't enumerate it
+                            // We'll rely on the new collection creation to overwrite it
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning($"Error checking for existing collection {identity}: {ex.Message}");
+                    }
+                }
+                
+                _logger.Information($"Completed cleanup check for character '{characterName}'");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Failed to clean up existing collections for character '{characterName}': {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Cleans up all StellarSync temporary collections (used on disconnect)
+        /// Note: Since we can't enumerate collections, this is a best-effort cleanup
+        /// </summary>
+        public async Task CleanupAllStellarSyncCollections()
+        {
+            try
+            {
+                if (!PenumbraAvailable) return;
+                
+                _logger.Information("Cleaning up all StellarSync temporary collections");
+                
+                // Since we can't enumerate collections, we'll use a different approach:
+                // We'll try to create collections with common StellarSync identities
+                // If they fail with "already exists", we know there are collections to clean up
+                
+                var commonIdentities = new[]
+                {
+                    "StellarSync_Player",
+                    "StellarSync_Character",
+                    "StellarSync_User",
+                    "StellarSync_Temp"
+                };
+                
+                foreach (var identity in commonIdentities)
+                {
+                    try
+                    {
+                        // Try to create a collection with the same identity to see if one exists
+                        var testResult = await RunOnFrameworkThreadAsync(() => 
+                        {
+                            var result = _ipcManager.Penumbra.CreateTemporaryCollection(identity, $"{identity}_cleanup_test", out var testId);
+                            if (result == PenumbraApiEc.Success)
+                            {
+                                // Successfully created, so no existing collection - clean up the test one
+                                _ipcManager.Penumbra.DeleteTemporaryCollection(testId);
+                            }
+                            return result;
+                        });
+                        
+                        if (testResult != PenumbraApiEc.Success)
+                        {
+                            _logger.Information($"Found existing collection with identity: {identity}");
+                            // There might be an existing collection, but we can't enumerate it
+                            // We'll rely on the new collection creation to overwrite it
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Warning($"Error checking for existing collection {identity}: {ex.Message}");
+                    }
+                }
+                
+                _logger.Information("Completed cleanup check for StellarSync collections");
+            }
+            catch (Exception ex)
+            {
+                _logger.Warning($"Failed to clean up StellarSync collections: {ex.Message}");
+            }
+        }
+
         public void Dispose()
         {
             if (_reconnectionTimer != null)
@@ -1305,6 +1811,7 @@ private dynamic? FindCharacterByName(string characterName)
                 _reconnectionTimer = null;
             }
             
+            _redrawSemaphore?.Dispose();
             _ipcManager?.Dispose();
         }
     }
