@@ -53,6 +53,7 @@ namespace StellarSync.UI
 
 private string sendToServerResult = "";
 private List<dynamic> onlineUsers = new List<dynamic>();
+        private List<dynamic> previousOnlineUsers = new List<dynamic>(); // Track previous user list for disconnect detection
         private string selectedUserId = "";
         private string pairResult = "";
         
@@ -752,7 +753,19 @@ public void SetPluginLog(IPluginLog pluginLog)
 
         private async void RequestUserData(string userId)
         {
-            if (networkService == null || !networkService.IsConnected) return;
+            if (networkService == null)
+            {
+                pairResult = "Error: Network service not available";
+                pluginLog?.Error("Network service is null");
+                return;
+            }
+            
+            if (!networkService.IsConnected)
+            {
+                pairResult = "Error: Not connected to server";
+                pluginLog?.Error("Not connected to server");
+                return;
+            }
             
             try
             {
@@ -767,17 +780,20 @@ public void SetPluginLog(IPluginLog pluginLog)
                     }
                 }
                 
+                pluginLog?.Information($"Requesting data from user {userId} ({userName})");
+                
                 // Start sync progress
                 StartSyncProgress(userId, userName);
                 UpdateSyncProgress(userId, "Requesting data...", 0.1f);
                 
                 await networkService.RequestUserDataAsync(userId);
-                pairResult = $"Requesting data from user {userId}...";
+                pairResult = $"Requesting data from user {userId} ({userName})...";
+                pluginLog?.Information($"Successfully sent request for user {userId} ({userName})");
             }
             catch (Exception ex)
             {
                 pairResult = $"Error: {ex.Message}";
-                pluginLog?.Error($"Failed to request user data: {ex.Message}");
+                pluginLog?.Error($"Failed to request user data for {userId}: {ex.Message}");
                 FailSyncProgress(userId, ex.Message);
             }
         }
@@ -786,8 +802,16 @@ public void SetPluginLog(IPluginLog pluginLog)
         {
             try
             {
+                pluginLog?.Debug($"Received server message of {message.Length} characters");
+                
+                // Log first 200 characters for debugging
+                var preview = message.Length > 200 ? message.Substring(0, 200) + "..." : message;
+                pluginLog?.Debug($"Message preview: {preview}");
+                
                 var messageObj = JsonConvert.DeserializeObject<dynamic>(message);
                 var messageType = messageObj?.type?.ToString();
+                
+                pluginLog?.Debug($"Processing message type: {messageType}");
                 
                 switch (messageType)
                 {
@@ -795,12 +819,15 @@ public void SetPluginLog(IPluginLog pluginLog)
                         HandleUsersList(messageObj?.data);
                         break;
                     case "user_character_data":
+                        pluginLog?.Information("Received user character data response");
                         HandleUserCharacterData(messageObj?.data);
                         break;
                     case "sync_request_queued":
+                        pluginLog?.Information("Received sync request queued response");
                         HandleSyncRequestQueued(messageObj?.data);
                         break;
                     case "error":
+                        pluginLog?.Warning($"Received server error: {messageObj?.error}");
                         HandleServerError(messageObj?.error);
                         break;
                     case "character_data_received":
@@ -809,11 +836,22 @@ public void SetPluginLog(IPluginLog pluginLog)
                     case "connected":
                         pluginLog?.Information("Connected to server successfully");
                         break;
+                    default:
+                        pluginLog?.Debug($"Unhandled message type: {messageType}");
+                        break;
                 }
+            }
+            catch (JsonException jsonEx)
+            {
+                pluginLog?.Error($"JSON parsing error: {jsonEx.Message}");
+                pluginLog?.Error($"Message length: {message.Length}");
+                pluginLog?.Error($"Message start: {message.Substring(0, Math.Min(100, message.Length))}");
+                pluginLog?.Error($"Message end: {message.Substring(Math.Max(0, message.Length - 100))}");
             }
             catch (Exception ex)
             {
                 pluginLog?.Error($"Failed to handle server message: {ex.Message}");
+                pluginLog?.Error($"Message length: {message.Length}");
             }
         }
 
@@ -821,20 +859,106 @@ private void HandleUsersList(dynamic usersData)
         {
             try
             {
-		onlineUsers.Clear();
-		if (usersData != null)
-		{
-			foreach (var user in usersData)
-			{
-				onlineUsers.Add(user);
-			}
-		}
+                // Store current users as previous for comparison
+                previousOnlineUsers.Clear();
+                foreach (var user in onlineUsers)
+                {
+                    previousOnlineUsers.Add(user);
+                }
+                
+                // Clear and repopulate current users
+                onlineUsers.Clear();
+                if (usersData != null)
+                {
+                    foreach (var user in usersData)
+                    {
+                        onlineUsers.Add(user);
+                    }
+                }
+                
+                // Detect disconnected users and clean up their collections
+                _ = Task.Run(async () => await HandleDisconnectedUsers());
             }
             catch (Exception ex)
             {
-		pluginLog?.Error($"Failed to handle users list: {ex.Message}");
-	}
-}
+                pluginLog?.Error($"Failed to handle users list: {ex.Message}");
+            }
+        }
+        
+        /// <summary>
+        /// Handles cleanup for users who have disconnected or are no longer visible
+        /// </summary>
+        private async Task HandleDisconnectedUsers()
+        {
+            try
+            {
+                if (modIntegrationService == null) return;
+                
+                // Get current visible user names
+                var currentVisibleNames = GetCurrentlyVisiblePlayerNames();
+                
+                // Find users who were previously online but are now disconnected or not visible
+                var disconnectedUsers = new List<string>();
+                
+                foreach (var previousUser in previousOnlineUsers)
+                {
+                    try
+                    {
+                        var userName = previousUser?.name?.ToString();
+                        if (string.IsNullOrEmpty(userName)) continue;
+                        
+                        // Check if user is still in the current online list
+                        var stillOnline = onlineUsers.Any(u => u?.name?.ToString() == userName);
+                        
+                        // Check if user is still visually visible
+                        var stillVisible = currentVisibleNames.Contains(userName);
+                        
+                        // If user is no longer online OR no longer visible, they should be cleaned up
+                        if (!stillOnline || !stillVisible)
+                        {
+                            disconnectedUsers.Add(userName);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        pluginLog?.Warning($"Error checking user disconnect status: {ex.Message}");
+                    }
+                }
+                
+                // Clean up collections and sync progress for disconnected users
+                if (disconnectedUsers.Count > 0)
+                {
+                    pluginLog?.Information($"Cleaning up collections for {disconnectedUsers.Count} disconnected users: {string.Join(", ", disconnectedUsers)}");
+                    
+                    foreach (var userName in disconnectedUsers)
+                    {
+                        try
+                        {
+                            // Clean up Penumbra collections
+                            await modIntegrationService.CleanupExistingCollectionsForCharacter(userName);
+                            
+                            // Clean up sync progress
+                            var userIdToRemove = previousOnlineUsers
+                                .FirstOrDefault(u => u?.name?.ToString() == userName)?.id?.ToString();
+                            if (!string.IsNullOrEmpty(userIdToRemove) && userSyncProgress.ContainsKey(userIdToRemove))
+                            {
+                                userSyncProgress.Remove(userIdToRemove);
+                            }
+                            
+                            pluginLog?.Information($"Cleaned up collections and sync progress for disconnected user: {userName}");
+                        }
+                        catch (Exception ex)
+                        {
+                            pluginLog?.Warning($"Failed to clean up collections for user {userName}: {ex.Message}");
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                pluginLog?.Error($"Error handling disconnected users: {ex.Message}");
+            }
+        }
 
 private void HandleUserCharacterData(dynamic data)
 {
@@ -1268,6 +1392,10 @@ private string GetPlayerCharacterName()
         private string _currentZone = string.Empty;
         private DateTime _lastZoneUpdate = DateTime.MinValue;
         private const int ZONE_UPDATE_COOLDOWN_MS = 5000; // Only update zone every 5 seconds
+        
+        // Visibility cleanup tracking
+        private DateTime _lastVisibilityCleanup = DateTime.MinValue;
+        private const int VISIBILITY_CLEANUP_COOLDOWN_MS = 10000; // Check for invisible users every 10 seconds
 
         /// <summary>
         /// Gets the current zone/area the local player is in with caching and reduced logging

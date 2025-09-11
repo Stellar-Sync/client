@@ -1865,7 +1865,7 @@ private dynamic? FindCharacterByName(string characterName)
         /// Cleans up any existing temporary collections for a specific character
         /// Note: Since we can't enumerate collections, we'll track them ourselves
         /// </summary>
-        private async Task CleanupExistingCollectionsForCharacter(string characterName)
+        public async Task CleanupExistingCollectionsForCharacter(string characterName)
         {
             try
             {

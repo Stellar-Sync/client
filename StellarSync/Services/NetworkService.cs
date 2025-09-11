@@ -90,40 +90,43 @@ namespace StellarSync.Services
 
         public async Task SendMessageAsync(string message)
         {
-            if (webSocket?.State == WebSocketState.Open)
+            // Check both isConnected flag and actual WebSocket state
+            if (!isConnected || webSocket?.State != WebSocketState.Open)
             {
-                try
-                {
-                    var buffer = Encoding.UTF8.GetBytes(message);
-                    var messageSize = buffer.Length;
-                    
-                    // Log message size for debugging
-                    System.Diagnostics.Debug.WriteLine($"DEBUG: Sending message of size: {messageSize} bytes ({messageSize / (1024.0 * 1024.0):F2} MB)");
-                    
-                    // Check if message is too large (over 10MB)
-                    if (messageSize > 10 * 1024 * 1024)
-                    {
-                        System.Diagnostics.Debug.WriteLine($"WARNING: Large message detected ({messageSize / (1024.0 * 1024.0):F2} MB), this may cause connection issues");
-                    }
-                    
-                    // Send the message
-                    await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancellationTokenSource?.Token ?? CancellationToken.None);
-                    
-                    System.Diagnostics.Debug.WriteLine($"DEBUG: Message sent successfully");
-                }
-                catch (Exception ex)
-                {
-                    var errorMessage = $"Failed to send message: {ex.Message}";
-                    System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
-                    ErrorOccurred?.Invoke(this, errorMessage);
-                    throw;
-                }
-            }
-            else
-            {
-                var error = $"WebSocket is not open. State: {webSocket?.State}";
+                var error = $"WebSocket is not connected. isConnected: {isConnected}, State: {webSocket?.State}";
+                System.Diagnostics.Debug.WriteLine($"ERROR: {error}");
                 ErrorOccurred?.Invoke(this, error);
                 throw new InvalidOperationException(error);
+            }
+
+            try
+            {
+                var buffer = Encoding.UTF8.GetBytes(message);
+                var messageSize = buffer.Length;
+                
+                // Log message size for debugging
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Sending message of size: {messageSize} bytes ({messageSize / (1024.0 * 1024.0):F2} MB)");
+                
+                // Check if message is too large (over 10MB)
+                if (messageSize > 10 * 1024 * 1024)
+                {
+                    System.Diagnostics.Debug.WriteLine($"WARNING: Large message detected ({messageSize / (1024.0 * 1024.0):F2} MB), this may cause connection issues");
+                }
+                
+                // Send the message
+                await webSocket.SendAsync(new ArraySegment<byte>(buffer), WebSocketMessageType.Text, true, cancellationTokenSource?.Token ?? CancellationToken.None);
+                
+                System.Diagnostics.Debug.WriteLine($"DEBUG: Message sent successfully");
+            }
+            catch (Exception ex)
+            {
+                // If sending fails, mark as disconnected
+                isConnected = false;
+                var errorMessage = $"Failed to send message: {ex.Message}";
+                System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
+                ErrorOccurred?.Invoke(this, errorMessage);
+                Disconnected?.Invoke(this, EventArgs.Empty);
+                throw;
             }
         }
 
@@ -284,7 +287,9 @@ public async Task RequestUserDataAsync(string userId)
 {
 	if (!isConnected)
 	{
-		throw new InvalidOperationException("Not connected to server");
+		var error = "Not connected to server";
+		System.Diagnostics.Debug.WriteLine($"ERROR: {error}");
+		throw new InvalidOperationException(error);
 	}
 
 	try
@@ -298,11 +303,18 @@ public async Task RequestUserDataAsync(string userId)
 			}
 		};
 
-		await SendMessageAsync(JsonConvert.SerializeObject(message));
+		var jsonMessage = JsonConvert.SerializeObject(message);
+		System.Diagnostics.Debug.WriteLine($"DEBUG: Requesting user data for user ID: {userId}");
+		System.Diagnostics.Debug.WriteLine($"DEBUG: Message to send: {jsonMessage}");
+		
+		await SendMessageAsync(jsonMessage);
+		System.Diagnostics.Debug.WriteLine($"DEBUG: User data request sent successfully for user ID: {userId}");
 	}
 	catch (Exception ex)
 	{
-		ErrorOccurred?.Invoke(this, $"Failed to request user data: {ex.Message}");
+		var errorMessage = $"Failed to request user data for user {userId}: {ex.Message}";
+		System.Diagnostics.Debug.WriteLine($"ERROR: {errorMessage}");
+		ErrorOccurred?.Invoke(this, errorMessage);
 		throw;
 	}
 }
@@ -310,6 +322,7 @@ public async Task RequestUserDataAsync(string userId)
         private async Task ReceiveMessagesAsync()
         {
             var buffer = new byte[4096];
+            var messageBuffer = new List<byte>();
 
             try
             {
@@ -319,8 +332,26 @@ public async Task RequestUserDataAsync(string userId)
 
                     if (result.MessageType == WebSocketMessageType.Text)
                     {
-                        var message = Encoding.UTF8.GetString(buffer, 0, result.Count);
-                        MessageReceived?.Invoke(this, message);
+                        // Add received data to message buffer
+                        messageBuffer.AddRange(buffer.Take(result.Count));
+
+                        // Check if this is the end of the message
+                        if (result.EndOfMessage)
+                        {
+                            // Convert complete message to string
+                            var completeMessage = Encoding.UTF8.GetString(messageBuffer.ToArray());
+                            System.Diagnostics.Debug.WriteLine($"DEBUG: Received complete message of {completeMessage.Length} characters");
+                            
+                            // Clear buffer for next message
+                            messageBuffer.Clear();
+                            
+                            // Process the complete message
+                            MessageReceived?.Invoke(this, completeMessage);
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"DEBUG: Received partial message frame of {result.Count} bytes");
+                        }
                     }
                     else if (result.MessageType == WebSocketMessageType.Close)
                     {
@@ -332,7 +363,10 @@ public async Task RequestUserDataAsync(string userId)
             }
             catch (Exception ex)
             {
+                // CRITICAL FIX: Set isConnected to false when connection fails
+                isConnected = false;
                 ErrorOccurred?.Invoke(this, ex.Message);
+                Disconnected?.Invoke(this, EventArgs.Empty);
             }
         }
 
