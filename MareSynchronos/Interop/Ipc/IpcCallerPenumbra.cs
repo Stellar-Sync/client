@@ -213,10 +213,35 @@ public sealed class IpcCallerPenumbra : DisposableMediatorSubscriberBase, IIpcCa
     {
         if (!APIAvailable) return Guid.Empty;
 
+        const string identity = "MareSynchronos";
+
         return await _dalamudUtil.RunOnFrameworkThread(() =>
         {
             var collName = "Mare_" + uid;
-            var collId = _penumbraCreateNamedTemporaryCollection.Invoke(collName);
+            PenumbraApiEc ec = _penumbraCreateNamedTemporaryCollection.Invoke(identity, collName, out Guid collId);
+
+            if (ec != PenumbraApiEc.Success)
+            {
+                // Try with a random identity if the default one is blocked
+                var randomIdentity = Guid.NewGuid().ToString().Replace("-", "").Substring(0, 8);
+                ec = _penumbraCreateNamedTemporaryCollection.Invoke(randomIdentity, collName, out collId);
+                
+                if (ec != PenumbraApiEc.Success)
+                {
+                    logger.LogWarning("Penumbra is blocking this plugin's ability to create temporary collections");
+                    _mareMediator.Publish(new NotificationMessage("Penumbra is blocking this plugin", 
+                        "Penumbra is blocking this plugin's ability to use features required for syncing.", 
+                        NotificationType.Error));
+                    return Guid.Empty;
+                }
+            }
+
+            if (ec != PenumbraApiEc.Success)
+            {
+                logger.LogWarning("Failed to create temporary collection for {uid}. Error: {ec}", uid, ec);
+                return Guid.Empty;
+            }
+
             logger.LogTrace("Creating Temp Collection {collName}, GUID: {collId}", collName, collId);
             return collId;
 
