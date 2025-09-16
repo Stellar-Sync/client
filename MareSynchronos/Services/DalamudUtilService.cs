@@ -1,4 +1,4 @@
-﻿using Dalamud.Game;
+using Dalamud.Game;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.ClientState.Objects;
 using Dalamud.Game.ClientState.Objects.SubKinds;
@@ -11,12 +11,12 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Lumina.Excel.Sheets;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.Interop;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.Interop;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Numerics;
@@ -24,7 +24,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using GameObject = FFXIVClientStructs.FFXIV.Client.Game.Object.GameObject;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public class DalamudUtilService : IHostedService, IMediatorSubscriber
 {

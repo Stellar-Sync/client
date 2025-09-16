@@ -1,6 +1,6 @@
-﻿using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Services.Mediator;
+namespace StellarSync.Services.Mediator;
 
 public abstract class DisposableMediatorSubscriberBase : MediatorSubscriberBase, IDisposable
 {

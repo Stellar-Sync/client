@@ -1,13 +1,13 @@
-﻿using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.Services;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.Services;
 using Microsoft.Extensions.Logging;
 using System.Numerics;
 using System.Text.Json.Nodes;
 
-namespace MareSynchronos.Interop.Ipc;
+namespace StellarSync.Interop.Ipc;
 
 public sealed class IpcCallerBrio : IIpcCaller
 {

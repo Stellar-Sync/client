@@ -1,16 +1,16 @@
-﻿using MareSynchronos.FileCache;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.PlayerData.Services;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
+﻿using StellarSync.FileCache;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.PlayerData.Services;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
-namespace MareSynchronos;
+namespace StellarSync;
 
 #pragma warning disable S125 // Sections of code should not be commented out
 /*
@@ -89,9 +89,9 @@ public class MarePlugin : MediatorSubscriberBase, IHostedService
     public Task StartAsync(CancellationToken cancellationToken)
     {
         var version = Assembly.GetExecutingAssembly().GetName().Version!;
-        Logger.LogInformation("Launching {name} {major}.{minor}.{build}", "Mare Synchronos", version.Major, version.Minor, version.Build);
+        Logger.LogInformation("Launching {name} {major}.{minor}.{build}", "Stellar Sync", version.Major, version.Minor, version.Build);
         Mediator.Publish(new EventMessage(new Services.Events.Event(nameof(MarePlugin), Services.Events.EventSeverity.Informational,
-            $"Starting Mare Synchronos {version.Major}.{version.Minor}.{version.Build}")));
+            $"Starting Stellar Sync {version.Major}.{version.Minor}.{version.Build}")));
 
         Mediator.Subscribe<SwitchToMainUiMessage>(this, (msg) => { if (_launchTask == null || _launchTask.IsCompleted) _launchTask = Task.Run(WaitForPlayerAndLaunchCharacterManager); });
         Mediator.Subscribe<DalamudLoginMessage>(this, (_) => DalamudUtilOnLogIn());

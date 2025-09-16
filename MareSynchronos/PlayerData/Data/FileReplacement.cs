@@ -1,8 +1,8 @@
-﻿using MareSynchronos.API.Data;
+using StellarSync.API.Data;
 
 using System.Text.RegularExpressions;
 
-namespace MareSynchronos.PlayerData.Data;
+namespace StellarSync.PlayerData.Data;
 
 public partial class FileReplacement
 {

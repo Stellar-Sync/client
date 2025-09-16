@@ -1,26 +1,26 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Comparer;
-using MareSynchronos.API.Routes;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.Utils;
-using MareSynchronos.WebAPI;
-using MareSynchronos.WebAPI.Files;
-using MareSynchronos.WebAPI.Files.Models;
-using MareSynchronos.WebAPI.SignalR.Utils;
+using StellarSync.API.Data;
+using StellarSync.API.Data.Comparer;
+using StellarSync.API.Routes;
+using StellarSync.FileCache;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.Utils;
+using StellarSync.WebAPI;
+using StellarSync.WebAPI.Files;
+using StellarSync.WebAPI.Files.Models;
+using StellarSync.WebAPI.SignalR.Utils;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -32,7 +32,7 @@ using System.Numerics;
 using System.Text;
 using System.Text.Json;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public class SettingsUi : WindowMediatorSubscriberBase
 {
@@ -77,7 +77,7 @@ public class SettingsUi : WindowMediatorSubscriberBase
         FileCacheManager fileCacheManager,
         FileCompactor fileCompactor, ApiController apiController,
         IpcManager ipcManager, CacheMonitor cacheMonitor,
-        DalamudUtilService dalamudUtilService, HttpClient httpClient) : base(logger, mediator, "Mare Synchronos Settings", performanceCollector)
+        DalamudUtilService dalamudUtilService, HttpClient httpClient) : base(logger, mediator, "Stellar Sync Settings", performanceCollector)
     {
         _configService = configService;
         _pairManager = pairManager;
@@ -1940,9 +1940,9 @@ public class SettingsUi : WindowMediatorSubscriberBase
         ImGui.AlignTextToFramePadding();
         ImGui.TextUnformatted("Community and Support:");
         ImGui.SameLine();
-        if (ImGui.Button("Mare Synchronos Discord"))
+        if (ImGui.Button("Stellar Sync Discord"))
         {
-            Util.OpenLink("https://discord.gg/mpNdkrTRjW");
+            Util.OpenLink("https://discord.gg/ZWqkGu4JJP");
         }
         ImGui.Separator();
         if (ImGui.BeginTabBar("mainTabBar"))

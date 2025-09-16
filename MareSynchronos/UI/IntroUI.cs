@@ -1,26 +1,26 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
-using MareSynchronos.FileCache;
-using MareSynchronos.Localization;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
+using StellarSync.FileCache;
+using StellarSync.Localization;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
 using Microsoft.Extensions.Logging;
 using System.Numerics;
 using System.Text.RegularExpressions;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public partial class IntroUi : WindowMediatorSubscriberBase
 {
     private readonly MareConfigService _configService;
     private readonly CacheMonitor _cacheMonitor;
-    private readonly Dictionary<string, string> _languages = new(StringComparer.Ordinal) { { "English", "en" }, { "Deutsch", "de" }, { "Français", "fr" } };
+    private readonly Dictionary<string, string> _languages = new(StringComparer.Ordinal) { { "English", "en" }, { "Deutsch", "de" }, { "Fran�ais", "fr" } };
     private readonly ServerConfigurationManager _serverConfigurationManager;
     private readonly DalamudUtilService _dalamudUtilService;
     private readonly UiSharedService _uiShared;
@@ -35,7 +35,7 @@ public partial class IntroUi : WindowMediatorSubscriberBase
 
     public IntroUi(ILogger<IntroUi> logger, UiSharedService uiShared, MareConfigService configService,
         CacheMonitor fileCacheManager, ServerConfigurationManager serverConfigurationManager, MareMediator mareMediator,
-        PerformanceCollectorService performanceCollectorService, DalamudUtilService dalamudUtilService) : base(logger, mareMediator, "Mare Synchronos Setup", performanceCollectorService)
+        PerformanceCollectorService performanceCollectorService, DalamudUtilService dalamudUtilService) : base(logger, mareMediator, "Stellar Sync Setup", performanceCollectorService)
     {
         _uiShared = uiShared;
         _configService = configService;
@@ -70,9 +70,9 @@ public partial class IntroUi : WindowMediatorSubscriberBase
 
         if (!_configService.Current.AcceptedAgreement && !_readFirstPage)
         {
-            _uiShared.BigText("Welcome to Mare Synchronos");
+            _uiShared.BigText("Welcome to Stellar Sync");
             ImGui.Separator();
-            UiSharedService.TextWrapped("Mare Synchronos is a plugin that will replicate your full current character state including all Penumbra mods to other paired Mare Synchronos users. " +
+            UiSharedService.TextWrapped("Stellar Sync is a plugin that will replicate your full current character state including all Penumbra mods to other paired Stellar Sync users. " +
                               "Note that you will have to have Penumbra as well as Glamourer installed to use this plugin.");
             UiSharedService.TextWrapped("We will have to setup a few things first before you can start using this plugin. Click on next to continue.");
 
@@ -167,11 +167,11 @@ public partial class IntroUi : WindowMediatorSubscriberBase
             }
             else
             {
-                UiSharedService.TextWrapped("To not unnecessary download files already present on your computer, Mare Synchronos will have to scan your Penumbra mod directory. " +
-                                     "Additionally, a local storage folder must be set where Mare Synchronos will download other character files to. " +
+                UiSharedService.TextWrapped("To not unnecessary download files already present on your computer, Stellar Sync will have to scan your Penumbra mod directory. " +
+                                     "Additionally, a local storage folder must be set where Stellar Sync will download other character files to. " +
                                      "Once the storage folder is set and the scan complete, this page will automatically forward to registration at a service.");
                 UiSharedService.TextWrapped("Note: The initial scan, depending on the amount of mods you have, might take a while. Please wait until it is completed.");
-                UiSharedService.ColorTextWrapped("Warning: once past this step you should not delete the FileCache.csv of Mare Synchronos in the Plugin Configurations folder of Dalamud. " +
+                UiSharedService.ColorTextWrapped("Warning: once past this step you should not delete the FileCache.csv of Stellar Sync in the Plugin Configurations folder of Dalamud. " +
                                           "Otherwise on the next launch a full re-scan of the file cache database will be initiated.", ImGuiColors.DalamudYellow);
                 UiSharedService.ColorTextWrapped("Warning: if the scan is hanging and does nothing for a long time, chances are high your Penumbra folder is not set up properly.", ImGuiColors.DalamudYellow);
                 _uiShared.DrawCacheDirectorySetting();
@@ -205,13 +205,13 @@ public partial class IntroUi : WindowMediatorSubscriberBase
             using (_uiShared.UidFont.Push())
                 ImGui.TextUnformatted("Service Registration");
             ImGui.Separator();
-            UiSharedService.TextWrapped("To be able to use Mare Synchronos you will have to register an account.");
-            UiSharedService.TextWrapped("For the official Mare Synchronos Servers the account creation will be handled on the official Mare Synchronos Discord. Due to security risks for the server, there is no way to handle this sensibly otherwise.");
+            UiSharedService.TextWrapped("To be able to use Stellar Sync you will have to register an account.");
+            UiSharedService.TextWrapped("For the official Stellar Sync Servers the account creation will be handled on the official Stellar Sync Discord. Due to security risks for the server, there is no way to handle this sensibly otherwise.");
             UiSharedService.TextWrapped("If you want to register at the main server \"" + WebAPI.ApiController.MainServer + "\" join the Discord and follow the instructions as described in #mare-service.");
 
-            if (ImGui.Button("Join the Mare Synchronos Discord"))
+            if (ImGui.Button("Join the Stellar Sync Discord"))
             {
-                Util.OpenLink("https://discord.gg/mpNdkrTRjW");
+                Util.OpenLink("https://discord.gg/ZWqkGu4JJP");
             }
 
             UiSharedService.TextWrapped("For all other non official services you will have to contact the appropriate service provider how to obtain a secret key.");

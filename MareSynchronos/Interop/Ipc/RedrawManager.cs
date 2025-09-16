@@ -1,12 +1,12 @@
-﻿using Dalamud.Game.ClientState.Objects.Types;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
+using Dalamud.Game.ClientState.Objects.Types;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
-namespace MareSynchronos.Interop.Ipc;
+namespace StellarSync.Interop.Ipc;
 
 public class RedrawManager
 {

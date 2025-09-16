@@ -1,10 +1,10 @@
-﻿using MareSynchronos.API.Data;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.Services.CharaData.Models;
+using StellarSync.API.Data;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.Services.CharaData.Models;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.WebAPI;
+namespace StellarSync.WebAPI;
 public partial class ApiController
 {
     public async Task<CharaDataFullDto?> CharaDataCreate()

@@ -1,20 +1,20 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.API.Dto.User;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.UI.Handlers;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto.Group;
+using StellarSync.API.Dto.User;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.UI.Handlers;
+using StellarSync.WebAPI;
 
-namespace MareSynchronos.UI.Components;
+namespace StellarSync.UI.Components;
 
 public class DrawUserPair
 {

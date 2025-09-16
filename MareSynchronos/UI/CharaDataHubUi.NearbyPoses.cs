@@ -1,11 +1,11 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface;
 using System.Numerics;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 internal partial class CharaDataHubUi
 {

@@ -1,13 +1,13 @@
-﻿using MareSynchronos.API.Dto.Group;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.UI;
-using MareSynchronos.UI.Components.Popup;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Dto.Group;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.UI;
+using StellarSync.UI.Components.Popup;
+using StellarSync.WebAPI;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public class UiFactory
 {

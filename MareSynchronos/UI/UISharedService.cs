@@ -1,4 +1,4 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.GameFonts;
@@ -10,18 +10,18 @@ using Dalamud.Interface.Utility.Raii;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Dalamud.Utility;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.Localization;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.Utils;
-using MareSynchronos.WebAPI;
-using MareSynchronos.WebAPI.SignalR;
+using StellarSync.FileCache;
+using StellarSync.Interop.Ipc;
+using StellarSync.Localization;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.Utils;
+using StellarSync.WebAPI;
+using StellarSync.WebAPI.SignalR;
 using Microsoft.Extensions.Logging;
 using System.IdentityModel.Tokens.Jwt;
 using System.Numerics;
@@ -29,7 +29,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public partial class UiSharedService : DisposableMediatorSubscriberBase
 {
@@ -462,7 +462,7 @@ public partial class UiSharedService : DisposableMediatorSubscriberBase
         {
             if (IconButton(FontAwesomeIcon.Folder))
             {
-                FileDialogManager.OpenFolderDialog("Pick Mare Synchronos Storage Folder", (success, path) =>
+                FileDialogManager.OpenFolderDialog("Pick Stellar Sync Storage Folder", (success, path) =>
                 {
                     if (!success) return;
 
@@ -811,7 +811,7 @@ public partial class UiSharedService : DisposableMediatorSubscriberBase
 
         if (!_penumbraExists || !_glamourerExists)
         {
-            ImGui.TextColored(ImGuiColors.DalamudRed, "You need to install both Penumbra and Glamourer and keep them up to date to use Mare Synchronos.");
+            ImGui.TextColored(ImGuiColors.DalamudRed, "You need to install both Penumbra and Glamourer and keep them up to date to use Stellar Sync.");
             return false;
         }
 

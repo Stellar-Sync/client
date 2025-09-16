@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.Services.Events;
+namespace StellarSync.Services.Events;
 
 public enum EventSeverity
 {

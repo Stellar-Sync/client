@@ -1,8 +1,8 @@
-﻿using MareSynchronos.API.Dto.Group;
-using MareSynchronos.WebAPI.SignalR.Utils;
+using StellarSync.API.Dto.Group;
+using StellarSync.WebAPI.SignalR.Utils;
 using Microsoft.AspNetCore.SignalR.Client;
 
-namespace MareSynchronos.WebAPI;
+namespace StellarSync.WebAPI;
 
 public partial class ApiController
 {

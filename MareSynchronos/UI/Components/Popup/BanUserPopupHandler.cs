@@ -1,12 +1,12 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Dto.Group;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI;
 using System.Numerics;
 
-namespace MareSynchronos.UI.Components.Popup;
+namespace StellarSync.UI.Components.Popup;
 
 public class BanUserPopupHandler : IPopupHandler
 {

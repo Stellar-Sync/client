@@ -1,15 +1,15 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto.Group;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI;
 using Microsoft.Extensions.Logging;
 using System.Numerics;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public class CreateSyncshellUI : WindowMediatorSubscriberBase
 {

@@ -1,14 +1,14 @@
-﻿using MareSynchronos.MareConfiguration;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI.Files.Models;
-using MareSynchronos.WebAPI.SignalR;
+using StellarSync.MareConfiguration;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI.Files.Models;
+using StellarSync.WebAPI.SignalR;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Reflection;
 
-namespace MareSynchronos.WebAPI.Files;
+namespace StellarSync.WebAPI.Files;
 
 public class FileTransferOrchestrator : DisposableMediatorSubscriberBase
 {

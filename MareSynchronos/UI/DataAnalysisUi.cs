@@ -1,19 +1,19 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
+using StellarSync.API.Data.Enum;
+using StellarSync.FileCache;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 using System.Numerics;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public class DataAnalysisUi : WindowMediatorSubscriberBase
 {

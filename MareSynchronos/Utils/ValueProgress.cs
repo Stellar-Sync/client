@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.Utils;
+namespace StellarSync.Utils;
 
 public class ValueProgress<T> : Progress<T>
 {

@@ -1,6 +1,6 @@
-﻿using System.Net;
+using System.Net;
 
-namespace MareSynchronos.WebAPI.Files.Models;
+namespace StellarSync.WebAPI.Files.Models;
 
 public class ProgressableStreamContent : StreamContent
 {

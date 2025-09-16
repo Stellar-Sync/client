@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.Interop.Ipc;
+namespace StellarSync.Interop.Ipc;
 
 public interface IIpcCaller : IDisposable
 {

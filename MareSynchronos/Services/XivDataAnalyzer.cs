@@ -1,16 +1,16 @@
-﻿using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Scene;
 using FFXIVClientStructs.Havok.Animation;
 using FFXIVClientStructs.Havok.Common.Base.Types;
 using FFXIVClientStructs.Havok.Common.Serialize.Util;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop.GameModel;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Handlers;
+using StellarSync.FileCache;
+using StellarSync.Interop.GameModel;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Handlers;
 using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public sealed class XivDataAnalyzer
 {

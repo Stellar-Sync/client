@@ -1,21 +1,21 @@
-﻿using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Game.ClientState.Objects.Types;
 using K4os.Compression.LZ4.Legacy;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Factories;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services.CharaData.Models;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Data;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Factories;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services.CharaData.Models;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
+using StellarSync.WebAPI;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public sealed partial class CharaDataManager : DisposableMediatorSubscriberBase
 {

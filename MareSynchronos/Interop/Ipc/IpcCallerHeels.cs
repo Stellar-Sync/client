@@ -1,10 +1,10 @@
-﻿using Dalamud.Plugin;
+using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Interop.Ipc;
+namespace StellarSync.Interop.Ipc;
 
 public sealed class IpcCallerHeels : IIpcCaller
 {

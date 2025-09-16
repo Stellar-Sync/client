@@ -1,6 +1,6 @@
-﻿using MareSynchronos.API.Data;
+using StellarSync.API.Data;
 
-namespace MareSynchronos.Services.Events;
+namespace StellarSync.Services.Events;
 
 public record Event
 {

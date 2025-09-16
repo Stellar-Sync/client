@@ -1,11 +1,11 @@
-﻿using Dalamud.Utility;
+using Dalamud.Utility;
 using Lumina.Excel.Sheets;
-using MareSynchronos.API.Dto.CharaData;
+using StellarSync.API.Dto.CharaData;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
 
-namespace MareSynchronos.Services.CharaData.Models;
+namespace StellarSync.Services.CharaData.Models;
 
 public sealed record PoseEntryExtended : PoseEntry
 {

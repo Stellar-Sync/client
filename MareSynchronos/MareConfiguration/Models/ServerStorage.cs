@@ -1,6 +1,6 @@
-﻿using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.Http.Connections;
 
-namespace MareSynchronos.MareConfiguration.Models;
+namespace StellarSync.MareConfiguration.Models;
 
 [Serializable]
 public class ServerStorage

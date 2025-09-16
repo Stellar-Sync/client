@@ -1,16 +1,16 @@
-﻿using Dalamud.Game.ClientState.Objects.Types;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Dto;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services.Events;
-using MareSynchronos.WebAPI.Files.Models;
+using Dalamud.Game.ClientState.Objects.Types;
+using StellarSync.API.Data;
+using StellarSync.API.Dto;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.API.Dto.Group;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services.Events;
+using StellarSync.WebAPI.Files.Models;
 using System.Numerics;
 
-namespace MareSynchronos.Services.Mediator;
+namespace StellarSync.Services.Mediator;
 
 #pragma warning disable MA0048 // File name must match type name
 #pragma warning disable S2094

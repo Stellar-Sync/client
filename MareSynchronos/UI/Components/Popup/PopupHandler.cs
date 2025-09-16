@@ -1,13 +1,13 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
 using System.Numerics;
 
-namespace MareSynchronos.UI.Components.Popup;
+namespace StellarSync.UI.Components.Popup;
 
 public class PopupHandler : WindowMediatorSubscriberBase
 {

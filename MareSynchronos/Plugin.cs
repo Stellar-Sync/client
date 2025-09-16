@@ -3,35 +3,35 @@ using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Configurations;
-using MareSynchronos.PlayerData.Factories;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.PlayerData.Services;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Events;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.UI;
-using MareSynchronos.UI.Components;
-using MareSynchronos.UI.Components.Popup;
-using MareSynchronos.UI.Handlers;
-using MareSynchronos.WebAPI;
-using MareSynchronos.WebAPI.Files;
-using MareSynchronos.WebAPI.SignalR;
+using StellarSync.FileCache;
+using StellarSync.Interop;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Configurations;
+using StellarSync.PlayerData.Factories;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.PlayerData.Services;
+using StellarSync.Services;
+using StellarSync.Services.Events;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.UI;
+using StellarSync.UI.Components;
+using StellarSync.UI.Components.Popup;
+using StellarSync.UI.Handlers;
+using StellarSync.WebAPI;
+using StellarSync.WebAPI.Files;
+using StellarSync.WebAPI.SignalR;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using NReco.Logging.File;
 using System.Net.Http.Headers;
 using System.Reflection;
-using MareSynchronos.Services.CharaData;
+using StellarSync.Services.CharaData;
 using Dalamud.Game;
 
-namespace MareSynchronos;
+namespace StellarSync;
 
 public sealed class Plugin : IDalamudPlugin
 {
@@ -76,7 +76,7 @@ public sealed class Plugin : IDalamudPlugin
         {
             lb.ClearProviders();
             lb.AddDalamudLogging(pluginLog, gameData.HasModifiedGameDataFiles);
-            lb.AddFile(Path.Combine(traceDir, $"mare-trace-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.log"), (opt) =>
+            lb.AddFile(Path.Combine(traceDir, $"stellar-trace-{DateTime.Now:yyyy-MM-dd-HH-mm-ss}.log"), (opt) =>
             {
                 opt.Append = true;
                 opt.RollingFilesConvention = FileLoggerOptions.FileRollingConvention.Ascending;
@@ -87,9 +87,9 @@ public sealed class Plugin : IDalamudPlugin
         })
         .ConfigureServices(collection =>
         {
-            collection.AddSingleton(new WindowSystem("MareSynchronos"));
+            collection.AddSingleton(new WindowSystem("StellarSync"));
             collection.AddSingleton<FileDialogManager>();
-            collection.AddSingleton(new Dalamud.Localization("MareSynchronos.Localization.", "", useEmbedded: true));
+            collection.AddSingleton(new Dalamud.Localization("StellarSync.Localization.", "", useEmbedded: true));
 
             // add mare related singletons
             collection.AddSingleton<MareMediator>();
@@ -168,7 +168,7 @@ public sealed class Plugin : IDalamudPlugin
             {
                 var httpClient = new HttpClient();
                 var ver = Assembly.GetExecutingAssembly().GetName().Version;
-                httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("MareSynchronos", ver!.Major + "." + ver!.Minor + "." + ver!.Build));
+                httpClient.DefaultRequestHeaders.UserAgent.Add(new ProductInfoHeaderValue("StellarSync", ver!.Major + "." + ver!.Minor + "." + ver!.Build));
                 return httpClient;
             });
             collection.AddSingleton((s) => new MareConfigService(pluginInterface.ConfigDirectory.FullName));

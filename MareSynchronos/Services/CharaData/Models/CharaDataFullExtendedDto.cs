@@ -1,7 +1,7 @@
-﻿using MareSynchronos.API.Dto.CharaData;
+using StellarSync.API.Dto.CharaData;
 using System.Collections.ObjectModel;
 
-namespace MareSynchronos.Services.CharaData.Models;
+namespace StellarSync.Services.CharaData.Models;
 
 public sealed record CharaDataFullExtendedDto : CharaDataFullDto
 {

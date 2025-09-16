@@ -1,10 +1,10 @@
-﻿using MareSynchronos.API.Data.Enum;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
+using StellarSync.API.Data.Enum;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.PlayerData.Factories;
+namespace StellarSync.PlayerData.Factories;
 
 public class GameObjectHandlerFactory
 {

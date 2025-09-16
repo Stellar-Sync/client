@@ -1,9 +1,9 @@
-﻿using MareSynchronos.FileCache;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI.Files;
+using StellarSync.FileCache;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI.Files;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.PlayerData.Factories;
+namespace StellarSync.PlayerData.Factories;
 
 public class FileDownloadManagerFactory
 {

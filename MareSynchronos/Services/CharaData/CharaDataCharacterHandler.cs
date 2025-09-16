@@ -1,12 +1,12 @@
-﻿using MareSynchronos.API.Data.Enum;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.PlayerData.Factories;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services.CharaData.Models;
-using MareSynchronos.Services.Mediator;
+using StellarSync.API.Data.Enum;
+using StellarSync.Interop.Ipc;
+using StellarSync.PlayerData.Factories;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services.CharaData.Models;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public sealed class CharaDataCharacterHandler : DisposableMediatorSubscriberBase
 {

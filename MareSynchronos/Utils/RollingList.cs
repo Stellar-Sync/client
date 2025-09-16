@@ -1,6 +1,6 @@
-﻿using System.Collections;
+using System.Collections;
 
-namespace MareSynchronos.Utils;
+namespace StellarSync.Utils;
 
 public class RollingList<T> : IEnumerable<T>
 {

@@ -1,18 +1,18 @@
-﻿using Dalamud.Plugin.Services;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Comparer;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.API.Dto.User;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Factories;
-using MareSynchronos.Services.Events;
-using MareSynchronos.Services.Mediator;
+using Dalamud.Plugin.Services;
+using StellarSync.API.Data;
+using StellarSync.API.Data.Comparer;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto.Group;
+using StellarSync.API.Dto.User;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Factories;
+using StellarSync.Services.Events;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
-namespace MareSynchronos.PlayerData.Pairs;
+namespace StellarSync.PlayerData.Pairs;
 
 public sealed class PairManager : DisposableMediatorSubscriberBase
 {

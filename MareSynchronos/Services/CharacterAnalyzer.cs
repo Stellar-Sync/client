@@ -1,13 +1,13 @@
-﻿using Lumina.Data.Files;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.FileCache;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.UI;
-using MareSynchronos.Utils;
+using Lumina.Data.Files;
+using StellarSync.API.Data;
+using StellarSync.API.Data.Enum;
+using StellarSync.FileCache;
+using StellarSync.Services.Mediator;
+using StellarSync.UI;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public sealed class CharacterAnalyzer : MediatorSubscriberBase, IDisposable
 {

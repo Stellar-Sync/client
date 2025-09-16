@@ -1,9 +1,9 @@
-﻿using MareSynchronos.MareConfiguration;
-using MareSynchronos.Services;
+using StellarSync.MareConfiguration;
+using StellarSync.Services;
 using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
-namespace MareSynchronos.FileCache;
+namespace StellarSync.FileCache;
 
 public sealed class FileCompactor
 {

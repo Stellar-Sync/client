@@ -1,6 +1,6 @@
-﻿using System.Numerics;
+using System.Numerics;
 
-namespace MareSynchronos.UI.Components.Popup;
+namespace StellarSync.UI.Components.Popup;
 
 public interface IPopupHandler
 {

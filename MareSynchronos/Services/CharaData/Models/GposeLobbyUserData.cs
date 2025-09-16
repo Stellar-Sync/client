@@ -1,12 +1,12 @@
-﻿using Dalamud.Utility;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.Utils;
+using Dalamud.Utility;
+using StellarSync.API.Data;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.Utils;
 using System.Globalization;
 using System.Numerics;
 using System.Text;
 
-namespace MareSynchronos.Services.CharaData.Models;
+namespace StellarSync.Services.CharaData.Models;
 
 public sealed record GposeLobbyUserData(UserData UserData)
 {

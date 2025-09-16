@@ -1,28 +1,28 @@
-﻿using Dalamud.Utility;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto;
-using MareSynchronos.API.Dto.User;
-using MareSynchronos.API.SignalR;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.WebAPI.SignalR;
-using MareSynchronos.WebAPI.SignalR.Utils;
+using Dalamud.Utility;
+using StellarSync.API.Data;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto;
+using StellarSync.API.Dto.User;
+using StellarSync.API.SignalR;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.WebAPI.SignalR;
+using StellarSync.WebAPI.SignalR.Utils;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 
-namespace MareSynchronos.WebAPI;
+namespace StellarSync.WebAPI;
 
 #pragma warning disable MA0040
 public sealed partial class ApiController : DisposableMediatorSubscriberBase, IMareHubClient
 {
-    public const string MainServer = "Lunae Crescere Incipientis (Official Central Server)";
-    public const string MainServiceUri = "wss://maresynchronos.com";
+    public const string MainServer = "Stellar Sync Server";
+    public const string MainServiceUri = "wss://stellar2.kasu.network";
 
     private readonly DalamudUtilService _dalamudUtil;
     private readonly HubFactory _hubFactory;

@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.WebAPI.SignalR;
+namespace StellarSync.WebAPI.SignalR;
 
 public class MareAuthFailureException : Exception
 {

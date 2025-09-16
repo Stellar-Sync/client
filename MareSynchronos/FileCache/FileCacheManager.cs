@@ -1,15 +1,15 @@
-﻿using K4os.Compression.LZ4.Legacy;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
+using K4os.Compression.LZ4.Legacy;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 
-namespace MareSynchronos.FileCache;
+namespace StellarSync.FileCache;
 
 public sealed class FileCacheManager : IHostedService
 {

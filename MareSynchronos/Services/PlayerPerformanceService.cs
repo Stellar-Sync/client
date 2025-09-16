@@ -1,14 +1,14 @@
-using MareSynchronos.API.Data;
-using MareSynchronos.FileCache;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services.Events;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.UI;
-using MareSynchronos.WebAPI.Files.Models;
+using StellarSync.API.Data;
+using StellarSync.FileCache;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services.Events;
+using StellarSync.Services.Mediator;
+using StellarSync.UI;
+using StellarSync.WebAPI.Files.Models;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public class PlayerPerformanceService
 {

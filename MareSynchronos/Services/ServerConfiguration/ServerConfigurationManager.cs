@@ -1,9 +1,9 @@
-﻿using Dalamud.Utility;
-using MareSynchronos.API.Routes;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI;
+using Dalamud.Utility;
+using StellarSync.API.Routes;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
@@ -12,7 +12,7 @@ using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
 
-namespace MareSynchronos.Services.ServerConfiguration;
+namespace StellarSync.Services.ServerConfiguration;
 
 public class ServerConfigurationManager
 {

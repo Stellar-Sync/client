@@ -1,24 +1,24 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.UI.Components;
-using MareSynchronos.UI.Handlers;
-using MareSynchronos.WebAPI;
-using MareSynchronos.WebAPI.Files;
-using MareSynchronos.WebAPI.Files.Models;
-using MareSynchronos.WebAPI.SignalR.Utils;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto.Group;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.UI.Components;
+using StellarSync.UI.Handlers;
+using StellarSync.WebAPI;
+using StellarSync.WebAPI.Files;
+using StellarSync.WebAPI.Files.Models;
+using StellarSync.WebAPI.SignalR.Utils;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
@@ -26,7 +26,7 @@ using System.Globalization;
 using System.Numerics;
 using System.Reflection;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public class CompactUi : WindowMediatorSubscriberBase
 {
@@ -114,11 +114,11 @@ public class CompactUi : WindowMediatorSubscriberBase
 #if DEBUG
         string dev = "Dev Build";
         var ver = Assembly.GetExecutingAssembly().GetName().Version!;
-        WindowName = $"Mare Synchronos {dev} ({ver.Major}.{ver.Minor}.{ver.Build})###MareSynchronosMainUI";
+        WindowName = $"Stellar Sync {dev} ({ver.Major}.{ver.Minor}.{ver.Build})###StellarSyncMainUI";
         Toggle();
 #else
         var ver = Assembly.GetExecutingAssembly().GetName().Version;
-        WindowName = "Mare Synchronos " + ver.Major + "." + ver.Minor + "." + ver.Build + "###MareSynchronosMainUI";
+        WindowName = "Stellar Sync " + ver.Major + "." + ver.Minor + "." + ver.Build + "###StellarSyncMainUI";
 #endif
         Mediator.Subscribe<SwitchToMainUiMessage>(this, (_) => IsOpen = true);
         Mediator.Subscribe<SwitchToIntroUiMessage>(this, (_) => IsOpen = false);
@@ -151,8 +151,8 @@ public class CompactUi : WindowMediatorSubscriberBase
                 ImGui.AlignTextToFramePadding();
                 ImGui.TextColored(ImGuiColors.DalamudRed, unsupported);
             }
-            UiSharedService.ColorTextWrapped($"Your Mare Synchronos installation is out of date, the current version is {ver.Major}.{ver.Minor}.{ver.Build}. " +
-                $"It is highly recommended to keep Mare Synchronos up to date. Open /xlplugins and update the plugin.", ImGuiColors.DalamudRed);
+            UiSharedService.ColorTextWrapped($"Your Stellar Sync installation is out of date, the current version is {ver.Major}.{ver.Minor}.{ver.Build}. " +
+                $"It is highly recommended to keep Stellar Sync up to date. Open /xlplugins and update the plugin.", ImGuiColors.DalamudRed);
         }
 
         if (!_ipcManager.Initialized)
@@ -566,10 +566,10 @@ public class CompactUi : WindowMediatorSubscriberBase
         {
             ServerState.Connecting => "Attempting to connect to the server.",
             ServerState.Reconnecting => "Connection to server interrupted, attempting to reconnect to the server.",
-            ServerState.Disconnected => "You are currently disconnected from the Mare Synchronos server.",
+            ServerState.Disconnected => "You are currently disconnected from the Stellar Sync server.",
             ServerState.Disconnecting => "Disconnecting from the server",
             ServerState.Unauthorized => "Server Response: " + _apiController.AuthFailureMessage,
-            ServerState.Offline => "Your selected Mare Synchronos server is currently offline.",
+            ServerState.Offline => "Your selected Stellar Sync server is currently offline.",
             ServerState.VersionMisMatch =>
                 "Your plugin or the server you are connecting to is out of date. Please update your plugin now. If you already did so, contact the server provider to update their server to the latest version.",
             ServerState.RateLimited => "You are rate limited for (re)connecting too often. Disconnect, wait 10 minutes and try again.",

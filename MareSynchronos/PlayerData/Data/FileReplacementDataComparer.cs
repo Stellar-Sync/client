@@ -1,6 +1,6 @@
-﻿using MareSynchronos.API.Data;
+using StellarSync.API.Data;
 
-namespace MareSynchronos.PlayerData.Data;
+namespace StellarSync.PlayerData.Data;
 
 public class FileReplacementDataComparer : IEqualityComparer<FileReplacementData>
 {

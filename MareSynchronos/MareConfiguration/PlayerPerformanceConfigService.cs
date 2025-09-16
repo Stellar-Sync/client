@@ -1,6 +1,6 @@
-﻿using MareSynchronos.MareConfiguration.Configurations;
+using StellarSync.MareConfiguration.Configurations;
 
-namespace MareSynchronos.MareConfiguration;
+namespace StellarSync.MareConfiguration;
 
 public class PlayerPerformanceConfigService : ConfigurationServiceBase<PlayerPerformanceConfig>
 {

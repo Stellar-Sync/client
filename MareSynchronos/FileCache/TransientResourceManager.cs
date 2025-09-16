@@ -1,15 +1,15 @@
-﻿using MareSynchronos.API.Data.Enum;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Configurations;
-using MareSynchronos.PlayerData.Data;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
+using StellarSync.API.Data.Enum;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Configurations;
+using StellarSync.PlayerData.Data;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
-namespace MareSynchronos.FileCache;
+namespace StellarSync.FileCache;
 
 public sealed class TransientResourceManager : DisposableMediatorSubscriberBase
 {

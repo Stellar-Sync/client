@@ -1,21 +1,21 @@
-﻿using MareSynchronos.API.Data;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.PlayerData.Factories;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Events;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.Utils;
-using MareSynchronos.WebAPI.Files;
+using StellarSync.API.Data;
+using StellarSync.FileCache;
+using StellarSync.Interop.Ipc;
+using StellarSync.PlayerData.Factories;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Events;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.Utils;
+using StellarSync.WebAPI.Files;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using ObjectKind = MareSynchronos.API.Data.Enum.ObjectKind;
+using ObjectKind = StellarSync.API.Data.Enum.ObjectKind;
 
-namespace MareSynchronos.PlayerData.Handlers;
+namespace StellarSync.PlayerData.Handlers;
 
 public sealed class PairHandler : DisposableMediatorSubscriberBase
 {

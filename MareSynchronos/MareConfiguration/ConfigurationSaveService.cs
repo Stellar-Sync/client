@@ -1,10 +1,10 @@
-﻿using MareSynchronos.MareConfiguration.Configurations;
+using StellarSync.MareConfiguration.Configurations;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Reflection;
 using System.Text.Json;
 
-namespace MareSynchronos.MareConfiguration;
+namespace StellarSync.MareConfiguration;
 
 public class ConfigurationSaveService : IHostedService
 {

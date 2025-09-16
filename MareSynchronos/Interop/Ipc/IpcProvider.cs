@@ -1,13 +1,13 @@
-﻿using Dalamud.Game.ClientState.Objects.Types;
+using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Ipc;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Interop.Ipc;
+namespace StellarSync.Interop.Ipc;
 
 public class IpcProvider : IHostedService, IMediatorSubscriber
 {

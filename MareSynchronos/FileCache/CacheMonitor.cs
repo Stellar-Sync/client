@@ -1,13 +1,13 @@
-﻿using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 
-namespace MareSynchronos.FileCache;
+namespace StellarSync.FileCache;
 
 public sealed class CacheMonitor : DisposableMediatorSubscriberBase
 {

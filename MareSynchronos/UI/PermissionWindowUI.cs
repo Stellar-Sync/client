@@ -1,16 +1,16 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Data.Enum;
+using StellarSync.API.Data.Extensions;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
+using StellarSync.WebAPI;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public class PermissionWindowUI : WindowMediatorSubscriberBase
 {

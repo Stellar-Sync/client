@@ -1,6 +1,6 @@
-﻿using MareSynchronos.MareConfiguration.Models;
+using StellarSync.MareConfiguration.Models;
 
-namespace MareSynchronos.MareConfiguration.Configurations;
+namespace StellarSync.MareConfiguration.Configurations;
 
 public class CharaDataConfig : IMareConfiguration
 {

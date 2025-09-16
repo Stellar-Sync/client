@@ -1,6 +1,6 @@
-﻿using MareSynchronos.Services.ServerConfiguration;
+using StellarSync.Services.ServerConfiguration;
 
-namespace MareSynchronos.UI.Handlers;
+namespace StellarSync.UI.Handlers;
 
 public class TagHandler
 {

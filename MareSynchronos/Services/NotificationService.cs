@@ -1,14 +1,14 @@
-﻿using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin.Services;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.Services.Mediator;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using NotificationType = MareSynchronos.MareConfiguration.Models.NotificationType;
+using NotificationType = StellarSync.MareConfiguration.Models.NotificationType;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public class NotificationService : DisposableMediatorSubscriberBase, IHostedService
 {
@@ -41,19 +41,19 @@ public class NotificationService : DisposableMediatorSubscriberBase, IHostedServ
 
     private void PrintErrorChat(string? message)
     {
-        SeStringBuilder se = new SeStringBuilder().AddText("[Mare Synchronos] Error: " + message);
+        SeStringBuilder se = new SeStringBuilder().AddText("[Stellar Sync] Error: " + message);
         _chatGui.PrintError(se.BuiltString);
     }
 
     private void PrintInfoChat(string? message)
     {
-        SeStringBuilder se = new SeStringBuilder().AddText("[Mare Synchronos] Info: ").AddItalics(message ?? string.Empty);
+        SeStringBuilder se = new SeStringBuilder().AddText("[Stellar Sync] Info: ").AddItalics(message ?? string.Empty);
         _chatGui.Print(se.BuiltString);
     }
 
     private void PrintWarnChat(string? message)
     {
-        SeStringBuilder se = new SeStringBuilder().AddText("[Mare Synchronos] ").AddUiForeground("Warning: " + (message ?? string.Empty), 31).AddUiForegroundOff();
+        SeStringBuilder se = new SeStringBuilder().AddText("[Stellar Sync] ").AddUiForeground("Warning: " + (message ?? string.Empty), 31).AddUiForegroundOff();
         _chatGui.Print(se.BuiltString);
     }
 

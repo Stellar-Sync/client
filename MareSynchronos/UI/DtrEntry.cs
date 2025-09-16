@@ -1,17 +1,17 @@
-﻿using Dalamud.Game.Gui.Dtr;
+using Dalamud.Game.Gui.Dtr;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Dalamud.Plugin.Services;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Configurations;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Configurations;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Runtime.InteropServices;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public sealed class DtrEntry : IDisposable, IHostedService
 {
@@ -88,7 +88,7 @@ public sealed class DtrEntry : IDisposable, IHostedService
     private IDtrBarEntry CreateEntry()
     {
         _logger.LogTrace("Creating new DtrBar entry");
-        var entry = _dtrBar.Get("Mare Synchronos");
+        var entry = _dtrBar.Get("Stellar Sync");
         entry.OnClick = _ => _mareMediator.Publish(new UiToggleMessage(typeof(CompactUi)));
 
         return entry;
@@ -146,19 +146,19 @@ public sealed class DtrEntry : IDisposable, IHostedService
                         .Select(x => string.Format("{0}", _configService.Current.PreferNoteInDtrTooltip ? x.GetNote() ?? x.PlayerName : x.PlayerName));
                 }
 
-                tooltip = $"Mare Synchronos: Connected{Environment.NewLine}----------{Environment.NewLine}{string.Join(Environment.NewLine, visiblePairs)}";
+                tooltip = $"Stellar Sync: Connected{Environment.NewLine}----------{Environment.NewLine}{string.Join(Environment.NewLine, visiblePairs)}";
                 colors = _configService.Current.DtrColorsPairsInRange;
             }
             else
             {
-                tooltip = "Mare Synchronos: Connected";
+                tooltip = "Stellar Sync: Connected";
                 colors = _configService.Current.DtrColorsDefault;
             }
         }
         else
         {
             text = "\uE044 \uE04C";
-            tooltip = "Mare Synchronos: Not Connected";
+            tooltip = "Stellar Sync: Not Connected";
             colors = _configService.Current.DtrColorsNotConnected;
         }
 

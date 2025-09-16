@@ -1,9 +1,9 @@
-﻿using Dalamud.Plugin.Services;
-using MareSynchronos.MareConfiguration;
+using Dalamud.Plugin.Services;
+using StellarSync.MareConfiguration;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
-namespace MareSynchronos.Interop;
+namespace StellarSync.Interop;
 
 internal sealed class DalamudLogger : ILogger
 {

@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.Services.Mediator;
+namespace StellarSync.Services.Mediator;
 
 public interface IMediatorSubscriber
 {

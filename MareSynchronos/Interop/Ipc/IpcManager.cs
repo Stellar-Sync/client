@@ -1,7 +1,7 @@
-﻿using MareSynchronos.Services.Mediator;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.Interop.Ipc;
+namespace StellarSync.Interop.Ipc;
 
 public sealed partial class IpcManager : DisposableMediatorSubscriberBase
 {

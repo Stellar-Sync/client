@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.MareConfiguration.Models.Obsolete;
+namespace StellarSync.MareConfiguration.Models.Obsolete;
 
 [Serializable]
 [Obsolete("Deprecated, use ServerStorage")]

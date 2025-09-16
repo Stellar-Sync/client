@@ -1,16 +1,16 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI.Files;
-using MareSynchronos.WebAPI.Files.Models;
+using StellarSync.MareConfiguration;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI.Files;
+using StellarSync.WebAPI.Files.Models;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Numerics;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 public class DownloadUi : WindowMediatorSubscriberBase
 {
@@ -23,7 +23,7 @@ public class DownloadUi : WindowMediatorSubscriberBase
 
     public DownloadUi(ILogger<DownloadUi> logger, DalamudUtilService dalamudUtilService, MareConfigService configService,
         FileUploadManager fileTransferManager, MareMediator mediator, UiSharedService uiShared, PerformanceCollectorService performanceCollectorService)
-        : base(logger, mediator, "Mare Synchronos Downloads", performanceCollectorService)
+        : base(logger, mediator, "Stellar Sync Downloads", performanceCollectorService)
     {
         _dalamudUtilService = dalamudUtilService;
         _configService = configService;
@@ -84,7 +84,7 @@ public class DownloadUi : WindowMediatorSubscriberBase
                     var totalUploaded = currentUploads.Sum(c => c.Transferred);
                     var totalToUpload = currentUploads.Sum(c => c.Total);
 
-                    UiSharedService.DrawOutlinedFont($"▲", ImGuiColors.DalamudWhite, new Vector4(0, 0, 0, 255), 1);
+                    UiSharedService.DrawOutlinedFont($"?", ImGuiColors.DalamudWhite, new Vector4(0, 0, 0, 255), 1);
                     ImGui.SameLine();
                     var xDistance = ImGui.GetCursorPosX();
                     UiSharedService.DrawOutlinedFont($"Compressing+Uploading {doneUploads}/{totalUploads}",
@@ -116,7 +116,7 @@ public class DownloadUi : WindowMediatorSubscriberBase
                     var totalBytes = item.Value.Sum(c => c.Value.TotalBytes);
                     var transferredBytes = item.Value.Sum(c => c.Value.TransferredBytes);
 
-                    UiSharedService.DrawOutlinedFont($"▼", ImGuiColors.DalamudWhite, new Vector4(0, 0, 0, 255), 1);
+                    UiSharedService.DrawOutlinedFont($"?", ImGuiColors.DalamudWhite, new Vector4(0, 0, 0, 255), 1);
                     ImGui.SameLine();
                     var xDistance = ImGui.GetCursorPosX();
                     UiSharedService.DrawOutlinedFont(

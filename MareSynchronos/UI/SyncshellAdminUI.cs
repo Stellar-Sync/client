@@ -1,19 +1,19 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.Group;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.WebAPI;
+using StellarSync.API.Data.Enum;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto.Group;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.WebAPI;
 using Microsoft.Extensions.Logging;
 using System.Globalization;
 
-namespace MareSynchronos.UI.Components.Popup;
+namespace StellarSync.UI.Components.Popup;
 
 public class SyncshellAdminUI : WindowMediatorSubscriberBase
 {

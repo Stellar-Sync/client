@@ -1,15 +1,15 @@
-﻿using Dalamud.Game.Command;
+using Dalamud.Game.Command;
 using Dalamud.Plugin.Services;
-using MareSynchronos.FileCache;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.UI;
-using MareSynchronos.WebAPI;
+using StellarSync.FileCache;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.UI;
+using StellarSync.WebAPI;
 using System.Globalization;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public sealed class CommandManagerService : IDisposable
 {
@@ -36,7 +36,7 @@ public sealed class CommandManagerService : IDisposable
         _mareConfigService = mareConfigService;
         _commandManager.AddHandler(_commandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the Mare Synchronos UI" + Environment.NewLine + Environment.NewLine +
+            HelpMessage = "Opens the Stellar Sync UI" + Environment.NewLine + Environment.NewLine +
                 "Additionally possible commands:" + Environment.NewLine +
                 "\t /mare toggle - Disconnects from Mare, if connected. Connects to Mare, if disconnected" + Environment.NewLine +
                 "\t /mare toggle on|off - Connects or disconnects to Mare respectively" + Environment.NewLine +
@@ -72,7 +72,7 @@ public sealed class CommandManagerService : IDisposable
         {
             if (_apiController.ServerState == WebAPI.SignalR.Utils.ServerState.Disconnecting)
             {
-                _mediator.Publish(new NotificationMessage("Mare disconnecting", "Cannot use /toggle while Mare Synchronos is still disconnecting",
+                _mediator.Publish(new NotificationMessage("Mare disconnecting", "Cannot use /toggle while Stellar Sync is still disconnecting",
                     NotificationType.Error));
             }
 

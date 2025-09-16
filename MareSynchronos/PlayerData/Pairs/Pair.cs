@@ -1,17 +1,17 @@
-﻿using Dalamud.Game.Gui.ContextMenu;
+using Dalamud.Game.Gui.ContextMenu;
 using Dalamud.Game.Text.SeStringHandling;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.API.Data.Extensions;
-using MareSynchronos.API.Dto.User;
-using MareSynchronos.PlayerData.Factories;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.Utils;
+using StellarSync.API.Data;
+using StellarSync.API.Data.Enum;
+using StellarSync.API.Data.Extensions;
+using StellarSync.API.Dto.User;
+using StellarSync.PlayerData.Factories;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.PlayerData.Pairs;
+namespace StellarSync.PlayerData.Pairs;
 
 public class Pair
 {

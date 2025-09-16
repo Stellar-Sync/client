@@ -1,6 +1,6 @@
-﻿using MareSynchronos.API.Dto.Files;
+using StellarSync.API.Dto.Files;
 
-namespace MareSynchronos.WebAPI.Files.Models;
+namespace StellarSync.WebAPI.Files.Models;
 
 public class DownloadFileTransfer : FileTransfer
 {

@@ -1,12 +1,12 @@
-﻿using Dalamud.Game.ClientState.Objects.Types;
-using MareSynchronos.API.Data;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.PlayerData.Pairs;
+using Dalamud.Game.ClientState.Objects.Types;
+using StellarSync.API.Data;
+using StellarSync.API.Data.Enum;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.PlayerData.Pairs;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
-namespace MareSynchronos.Utils;
+namespace StellarSync.Utils;
 
 public static class VariousExtensions
 {

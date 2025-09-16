@@ -1,16 +1,16 @@
-﻿using MareSynchronos.API.Routes;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.Utils;
+using StellarSync.API.Routes;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.IdentityModel.Tokens.Jwt;
 using System.Net.Http.Headers;
 using System.Reflection;
 
-namespace MareSynchronos.WebAPI.SignalR;
+namespace StellarSync.WebAPI.SignalR;
 
 public sealed class TokenProvider : IDisposable, IMediatorSubscriber
 {

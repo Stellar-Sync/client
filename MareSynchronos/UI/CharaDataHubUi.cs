@@ -1,22 +1,22 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Colors;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
-using MareSynchronos.API.Dto.CharaData;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services;
-using MareSynchronos.Services.CharaData;
-using MareSynchronos.Services.CharaData.Models;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.Utils;
+using StellarSync.API.Dto.CharaData;
+using StellarSync.MareConfiguration;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services;
+using StellarSync.Services.CharaData;
+using StellarSync.Services.CharaData.Models;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.Utils;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.UI;
+namespace StellarSync.UI;
 
 internal sealed partial class CharaDataHubUi : WindowMediatorSubscriberBase
 {
@@ -79,7 +79,7 @@ internal sealed partial class CharaDataHubUi : WindowMediatorSubscriberBase
                          UiSharedService uiSharedService, ServerConfigurationManager serverConfigurationManager,
                          DalamudUtilService dalamudUtilService, FileDialogManager fileDialogManager, PairManager pairManager,
                          CharaDataGposeTogetherManager charaDataGposeTogetherManager)
-        : base(logger, mediator, "Mare Synchronos Character Data Hub###MareSynchronosCharaDataUI", performanceCollectorService)
+        : base(logger, mediator, "Stellar Sync Character Data Hub###StellarSyncCharaDataUI", performanceCollectorService)
     {
         SetWindowSizeConstraints();
 

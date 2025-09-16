@@ -1,4 +1,4 @@
-﻿namespace MareSynchronos.WebAPI.Files.Models;
+namespace StellarSync.WebAPI.Files.Models;
 
 public class FileDownloadStatus
 {

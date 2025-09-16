@@ -1,12 +1,12 @@
-﻿using MareSynchronos.API.Data;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Utils;
-using MareSynchronos.WebAPI;
-using MareSynchronos.WebAPI.Files;
+using StellarSync.API.Data;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
+using StellarSync.Utils;
+using StellarSync.WebAPI;
+using StellarSync.WebAPI.Files;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.PlayerData.Pairs;
+namespace StellarSync.PlayerData.Pairs;
 
 public class VisibleUserDataDistributor : DisposableMediatorSubscriberBase
 {

@@ -1,6 +1,6 @@
-﻿using MareSynchronos.API.Data.Enum;
+using StellarSync.API.Data.Enum;
 
-namespace MareSynchronos.MareConfiguration.Configurations;
+namespace StellarSync.MareConfiguration.Configurations;
 
 public class TransientConfig : IMareConfiguration
 {

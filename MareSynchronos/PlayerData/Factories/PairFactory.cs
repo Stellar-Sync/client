@@ -1,10 +1,10 @@
-﻿using MareSynchronos.API.Dto.User;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
+using StellarSync.API.Dto.User;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
 using Microsoft.Extensions.Logging;
 
-namespace MareSynchronos.PlayerData.Factories;
+namespace StellarSync.PlayerData.Factories;
 
 public class PairFactory
 {

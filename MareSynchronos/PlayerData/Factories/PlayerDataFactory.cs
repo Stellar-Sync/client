@@ -1,16 +1,16 @@
-﻿using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using MareSynchronos.API.Data.Enum;
-using MareSynchronos.FileCache;
-using MareSynchronos.Interop.Ipc;
-using MareSynchronos.MareConfiguration.Models;
-using MareSynchronos.PlayerData.Data;
-using MareSynchronos.PlayerData.Handlers;
-using MareSynchronos.Services;
-using MareSynchronos.Services.Mediator;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using StellarSync.API.Data.Enum;
+using StellarSync.FileCache;
+using StellarSync.Interop.Ipc;
+using StellarSync.MareConfiguration.Models;
+using StellarSync.PlayerData.Data;
+using StellarSync.PlayerData.Handlers;
+using StellarSync.Services;
+using StellarSync.Services.Mediator;
 using Microsoft.Extensions.Logging;
-using CharacterData = MareSynchronos.PlayerData.Data.CharacterData;
+using CharacterData = StellarSync.PlayerData.Data.CharacterData;
 
-namespace MareSynchronos.PlayerData.Factories;
+namespace StellarSync.PlayerData.Factories;
 
 public class PlayerDataFactory
 {

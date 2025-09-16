@@ -1,17 +1,17 @@
-﻿using MareSynchronos.API.Data;
-using MareSynchronos.API.Dto.Files;
-using MareSynchronos.API.Routes;
-using MareSynchronos.FileCache;
-using MareSynchronos.MareConfiguration;
-using MareSynchronos.Services.Mediator;
-using MareSynchronos.Services.ServerConfiguration;
-using MareSynchronos.UI;
-using MareSynchronos.WebAPI.Files.Models;
+using StellarSync.API.Data;
+using StellarSync.API.Dto.Files;
+using StellarSync.API.Routes;
+using StellarSync.FileCache;
+using StellarSync.MareConfiguration;
+using StellarSync.Services.Mediator;
+using StellarSync.Services.ServerConfiguration;
+using StellarSync.UI;
+using StellarSync.WebAPI.Files.Models;
 using Microsoft.Extensions.Logging;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 
-namespace MareSynchronos.WebAPI.Files;
+namespace StellarSync.WebAPI.Files;
 
 public sealed class FileUploadManager : DisposableMediatorSubscriberBase
 {

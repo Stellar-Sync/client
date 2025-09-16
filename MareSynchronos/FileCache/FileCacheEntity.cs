@@ -1,6 +1,6 @@
-﻿#nullable disable
+#nullable disable
 
-namespace MareSynchronos.FileCache;
+namespace StellarSync.FileCache;
 
 public class FileCacheEntity
 {

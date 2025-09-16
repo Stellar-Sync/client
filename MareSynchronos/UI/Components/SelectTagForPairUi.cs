@@ -1,14 +1,14 @@
-﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.Utility;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Utility;
-using MareSynchronos.PlayerData.Pairs;
-using MareSynchronos.UI.Handlers;
+using StellarSync.PlayerData.Pairs;
+using StellarSync.UI.Handlers;
 
 using System.Numerics;
 
-namespace MareSynchronos.UI.Components;
+namespace StellarSync.UI.Components;
 
 public class SelectTagForPairUi
 {

@@ -1,12 +1,12 @@
-﻿using MareSynchronos.MareConfiguration;
-using MareSynchronos.Utils;
+using StellarSync.MareConfiguration;
+using StellarSync.Utils;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Globalization;
 using System.Text;
 
-namespace MareSynchronos.Services;
+namespace StellarSync.Services;
 
 public sealed class PerformanceCollectorService : IHostedService
 {
