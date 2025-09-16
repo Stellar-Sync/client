@@ -1,0 +1,19 @@
+{
+  "Author": "Kasu",
+  "Name": "Stellar Sync",
+  "InternalName": "StellarSync",
+  "AssemblyVersion": "1.12.0",
+  "Description": "A character synchronization plugin for FFXIV that synchronizes character mods and appearance with other players.",
+  "ApplicableVersion": "any",
+  "RepoUrl": "https://github.com/Stellar-Sync/client",
+  "Tags": ["customization"],
+  "DalamudApiLevel": 13,
+  "LoadPriority": 0,
+  "IconUrl": "https://raw.githubusercontent.com/Stellar-Sync/client/main/StellarSync/images/icon.png",
+  "Punchline": "Synchronize your character appearance with other players",
+  "IsHide": "False",
+  "IsTestingExclusive": "False",
+  "DownloadLinkInstall": "https://github.com/Stellar-Sync/client/releases/download/1.12.0/latest.zip",
+  "DownloadLinkTesting": "https://github.com/Stellar-Sync/client/releases/download/1.12.0/latest.zip",
+  "DownloadLinkUpdate": "https://github.com/Stellar-Sync/client/releases/download/1.12.0/latest.zip"
+}
