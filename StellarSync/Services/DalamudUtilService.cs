@@ -522,7 +522,7 @@ public class DalamudUtilService : IHostedService, IMediatorSubscriber
         const int tick = 250;
         int curWaitTime = 0;
         _logger.LogTrace("RenderFlags: {flags}", obj->RenderFlags.ToString("X"));
-        while (obj->RenderFlags != 0x00 && curWaitTime < timeOut)
+        while ((uint)obj->RenderFlags != 0x00 && curWaitTime < timeOut)
         {
             _logger.LogTrace($"Waiting for gpose actor to finish drawing");
             curWaitTime += tick;
@@ -552,7 +552,7 @@ public class DalamudUtilService : IHostedService, IMediatorSubscriber
         bool isDrawingChanged = false;
         if ((nint)drawObj != IntPtr.Zero)
         {
-            isDrawing = gameObj->RenderFlags == 0b100000000000;
+            isDrawing = (uint)gameObj->RenderFlags == 0b100000000000;
             if (!isDrawing)
             {
                 isDrawing = ((CharacterBase*)drawObj)->HasModelInSlotLoaded != 0;
