@@ -1,0 +1,11 @@
+<Project>
+  <!-- Must extend here: Dalamud.NET.Sdk rewrites BuildDependsOn after the .csproj body is evaluated -->
+  <PropertyGroup>
+    <BuildDependsOn>$(BuildDependsOn);CopyStellarManifestToOutput;</BuildDependsOn>
+  </PropertyGroup>
+  <Target Name="CopyStellarManifestToOutput">
+    <Copy SourceFiles="$(MSBuildProjectDirectory)/StellarSync.json"
+          DestinationFolder="$(TargetDir)"
+          SkipUnchangedFiles="false" />
+  </Target>
+</Project>
