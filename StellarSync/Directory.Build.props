@@ -1,0 +1,6 @@
+<Project>
+  <!-- Dalamud.NET.Sdk already brings in DalamudPackager; disable that so we keep a single explicit PackageReference in the .csproj. -->
+  <PropertyGroup>
+    <Use_DalamudPackager>false</Use_DalamudPackager>
+  </PropertyGroup>
+</Project>

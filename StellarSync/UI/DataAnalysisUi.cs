@@ -634,61 +634,59 @@ public class DataAnalysisUi : WindowMediatorSubscriberBase
                     {
                         fileGroupText += " (!)";
                     }
-                    ImRaii.IEndObject fileTab;
+
                     using (var textcol = ImRaii.PushColor(ImGuiCol.Text, UiSharedService.Color(new(0, 0, 0, 1)),
-                        requiresCompute && !string.Equals(_selectedFileTypeTab, fileGroup.Key, StringComparison.Ordinal)))
+                               requiresCompute && !string.Equals(_selectedFileTypeTab, fileGroup.Key, StringComparison.Ordinal)))
+                    using (var fileTab = ImRaii.TabItem(fileGroupText + "###" + fileGroup.Key))
                     {
-                        fileTab = ImRaii.TabItem(fileGroupText + "###" + fileGroup.Key);
-                    }
+                        if (!fileTab)
+                            continue;
 
-                    if (!fileTab) { fileTab.Dispose(); continue; }
-
-                    if (!string.Equals(fileGroup.Key, _selectedFileTypeTab, StringComparison.Ordinal))
-                    {
-                        _selectedFileTypeTab = fileGroup.Key;
-                        _selectedHash = string.Empty;
-                        _enableBc7ConversionMode = false;
-                        _texturesToConvert.Clear();
-                    }
-
-                    ImGui.TextUnformatted($"{fileGroup.Key} files");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted(fileGroup.Count().ToString());
-
-                    ImGui.TextUnformatted($"{fileGroup.Key} files size (actual):");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted(UiSharedService.ByteToString(fileGroup.Sum(c => c.OriginalSize)));
-
-                    ImGui.TextUnformatted($"{fileGroup.Key} files size (compressed for up/download only):");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted(UiSharedService.ByteToString(fileGroup.Sum(c => c.CompressedSize)));
-
-                    if (string.Equals(_selectedFileTypeTab, "tex", StringComparison.Ordinal))
-                    {
-                        ImGui.Checkbox("Enable BC7 Conversion Mode", ref _enableBc7ConversionMode);
-                        if (_enableBc7ConversionMode)
+                        if (!string.Equals(fileGroup.Key, _selectedFileTypeTab, StringComparison.Ordinal))
                         {
-                            UiSharedService.ColorText("WARNING BC7 CONVERSION:", ImGuiColors.DalamudYellow);
-                            ImGui.SameLine();
-                            UiSharedService.ColorText("Converting textures to BC7 is irreversible!", ImGuiColors.DalamudRed);
-                            UiSharedService.ColorTextWrapped("- Converting textures to BC7 will reduce their size (compressed and uncompressed) drastically. It is recommended to be used for large (4k+) textures." +
-                            Environment.NewLine + "- Some textures, especially ones utilizing colorsets, might not be suited for BC7 conversion and might produce visual artifacts." +
-                            Environment.NewLine + "- Before converting textures, make sure to have the original files of the mod you are converting so you can reimport it in case of issues." +
-                            Environment.NewLine + "- Conversion will convert all found texture duplicates (entries with more than 1 file path) automatically." +
-                            Environment.NewLine + "- Converting textures to BC7 is a very expensive operation and, depending on the amount of textures to convert, will take a while to complete."
-                                , ImGuiColors.DalamudYellow);
-                            if (_texturesToConvert.Count > 0 && _uiSharedService.IconTextButton(FontAwesomeIcon.PlayCircle, "Start conversion of " + _texturesToConvert.Count + " texture(s)"))
+                            _selectedFileTypeTab = fileGroup.Key;
+                            _selectedHash = string.Empty;
+                            _enableBc7ConversionMode = false;
+                            _texturesToConvert.Clear();
+                        }
+
+                        ImGui.TextUnformatted($"{fileGroup.Key} files");
+                        ImGui.SameLine();
+                        ImGui.TextUnformatted(fileGroup.Count().ToString());
+
+                        ImGui.TextUnformatted($"{fileGroup.Key} files size (actual):");
+                        ImGui.SameLine();
+                        ImGui.TextUnformatted(UiSharedService.ByteToString(fileGroup.Sum(c => c.OriginalSize)));
+
+                        ImGui.TextUnformatted($"{fileGroup.Key} files size (compressed for up/download only):");
+                        ImGui.SameLine();
+                        ImGui.TextUnformatted(UiSharedService.ByteToString(fileGroup.Sum(c => c.CompressedSize)));
+
+                        if (string.Equals(_selectedFileTypeTab, "tex", StringComparison.Ordinal))
+                        {
+                            ImGui.Checkbox("Enable BC7 Conversion Mode", ref _enableBc7ConversionMode);
+                            if (_enableBc7ConversionMode)
                             {
-                                _conversionCancellationTokenSource = _conversionCancellationTokenSource.CancelRecreate();
-                                _conversionTask = _ipcManager.Penumbra.ConvertTextureFiles(_logger, _texturesToConvert, _conversionProgress, _conversionCancellationTokenSource.Token);
+                                UiSharedService.ColorText("WARNING BC7 CONVERSION:", ImGuiColors.DalamudYellow);
+                                ImGui.SameLine();
+                                UiSharedService.ColorText("Converting textures to BC7 is irreversible!", ImGuiColors.DalamudRed);
+                                UiSharedService.ColorTextWrapped("- Converting textures to BC7 will reduce their size (compressed and uncompressed) drastically. It is recommended to be used for large (4k+) textures." +
+                                Environment.NewLine + "- Some textures, especially ones utilizing colorsets, might not be suited for BC7 conversion and might produce visual artifacts." +
+                                Environment.NewLine + "- Before converting textures, make sure to have the original files of the mod you are converting so you can reimport it in case of issues." +
+                                Environment.NewLine + "- Conversion will convert all found texture duplicates (entries with more than 1 file path) automatically." +
+                                Environment.NewLine + "- Converting textures to BC7 is a very expensive operation and, depending on the amount of textures to convert, will take a while to complete."
+                                    , ImGuiColors.DalamudYellow);
+                                if (_texturesToConvert.Count > 0 && _uiSharedService.IconTextButton(FontAwesomeIcon.PlayCircle, "Start conversion of " + _texturesToConvert.Count + " texture(s)"))
+                                {
+                                    _conversionCancellationTokenSource = _conversionCancellationTokenSource.CancelRecreate();
+                                    _conversionTask = _ipcManager.Penumbra.ConvertTextureFiles(_logger, _texturesToConvert, _conversionProgress, _conversionCancellationTokenSource.Token);
+                                }
                             }
                         }
+
+                        ImGui.Separator();
+                        DrawTable(fileGroup);
                     }
-
-                    ImGui.Separator();
-                    DrawTable(fileGroup);
-
-                    fileTab.Dispose();
                 }
             }
         }

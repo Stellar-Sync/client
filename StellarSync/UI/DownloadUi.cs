@@ -1,5 +1,6 @@
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface.Colors;
+using Dalamud.Interface.Windowing;
 using StellarSync.StellarConfiguration;
 using StellarSync.PlayerData.Handlers;
 using StellarSync.Services;
