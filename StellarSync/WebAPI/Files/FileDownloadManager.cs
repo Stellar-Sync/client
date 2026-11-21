@@ -232,7 +232,7 @@ public partial class FileDownloadManager : DisposableMediatorSubscriberBase
         {
             if (!_orchestrator.ForbiddenTransfers.Exists(f => string.Equals(f.Hash, dto.Hash, StringComparison.Ordinal)))
             {
-                _orchestrator.ForbiddenTransfers.Add(new DownloadFileTransfer(dto));
+                _orchestrator.AddForbiddenTransfer(new DownloadFileTransfer(dto));
             }
         }
 

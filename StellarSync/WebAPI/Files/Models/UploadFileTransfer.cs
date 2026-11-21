@@ -9,5 +9,10 @@ public class UploadFileTransfer : FileTransfer
     }
 
     public string LocalFile { get; set; } = string.Empty;
-    public override long Total { get; set; }
+    private long _total;
+    public override long Total
+    {
+        get => Interlocked.Read(ref _total);
+        set => Interlocked.Exchange(ref _total, value);
+    }
 }

@@ -43,7 +43,10 @@ public class ProgressableStreamContent : StreamContent
         base.Dispose(disposing);
     }
 
-    protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+    protected override Task SerializeToStreamAsync(Stream stream, TransportContext? context)
+        => SerializeToStreamAsync(stream, context, CancellationToken.None);
+
+    protected override async Task SerializeToStreamAsync(Stream stream, TransportContext? context, CancellationToken cancellationToken)
     {
         PrepareContent();
 
@@ -55,15 +58,15 @@ public class ProgressableStreamContent : StreamContent
         {
             while (true)
             {
-                var length = await _streamToWrite.ReadAsync(buffer).ConfigureAwait(false);
+                var length = await _streamToWrite.ReadAsync(buffer.AsMemory(), cancellationToken).ConfigureAwait(false);
                 if (length <= 0)
                 {
                     break;
                 }
 
+                await stream.WriteAsync(buffer.AsMemory(0, length), cancellationToken).ConfigureAwait(false);
                 uploaded += length;
                 _progress?.Report(new UploadProgress(uploaded, size));
-                await stream.WriteAsync(buffer.AsMemory(0, length)).ConfigureAwait(false);
             }
         }
     }

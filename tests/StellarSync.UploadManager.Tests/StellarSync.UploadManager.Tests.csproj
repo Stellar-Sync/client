@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../../StellarSync/WebAPI/Files/FileUploadManager.cs" Link="FileUploadManager.cs" />
+    <Compile Include="../../StellarSync/WebAPI/Files/UploadBatchRunner.cs" Link="UploadBatchRunner.cs" />
+    <Compile Include="../../StellarSync/WebAPI/Files/Models/ProgressableStreamContent.cs" Link="ProgressableStreamContent.cs" />
+    <Compile Include="../../StellarSync/WebAPI/Files/Models/UploadProgress.cs" Link="UploadProgress.cs" />
+    <Compile Include="../../StellarSync/WebAPI/Files/Models/FileTransfer.cs" Link="FileTransfer.cs" />
+    <Compile Include="../../StellarSync/WebAPI/Files/Models/UploadFileTransfer.cs" Link="UploadFileTransfer.cs" />
+  </ItemGroup>
+</Project>
