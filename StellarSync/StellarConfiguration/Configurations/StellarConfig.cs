@@ -29,6 +29,7 @@ public class StellarConfig : IStellarConfiguration
     public bool OpenGposeImportOnGposeStart { get; set; } = false;
     public bool OpenPopupOnAdd { get; set; } = true;
     public int ParallelDownloads { get; set; } = 10;
+    public int ParallelUploads { get; set; } = 2;
     public int DownloadSpeedLimitInBytes { get; set; } = 0;
     public DownloadSpeeds DownloadSpeedType { get; set; } = DownloadSpeeds.MBps;
     public bool PreferNotesOverNamesForVisible { get; set; } = false;

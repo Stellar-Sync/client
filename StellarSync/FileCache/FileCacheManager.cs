@@ -1,4 +1,3 @@
-using K4os.Compression.LZ4.Legacy;
 using StellarSync.Interop.Ipc;
 using StellarSync.StellarConfiguration;
 using StellarSync.Services.Mediator;
@@ -142,9 +141,9 @@ public sealed class FileCacheManager : IHostedService
 
     public async Task<(string, byte[])> GetCompressedFileData(string fileHash, CancellationToken uploadToken)
     {
-        var fileCache = GetFileCacheByHash(fileHash)!.ResolvedFilepath;
-        return (fileHash, LZ4Wrapper.WrapHC(await File.ReadAllBytesAsync(fileCache, uploadToken).ConfigureAwait(false), 0,
-            (int)new FileInfo(fileCache).Length));
+        var fileCache = GetFileCacheByHash(fileHash)
+            ?? throw new FileNotFoundException($"Upload file {fileHash} is no longer available.");
+        return (fileHash, await UploadFileCompressor.CompressAsync(fileCache.ResolvedFilepath, uploadToken).ConfigureAwait(false));
     }
 
     public FileCacheEntity? GetFileCacheByHash(string hash)

@@ -14,13 +14,15 @@ public class VisibleUserDataDistributor : DisposableMediatorSubscriberBase
     private readonly DalamudUtilService _dalamudUtil;
     private readonly FileUploadManager _fileTransferManager;
     private readonly PairManager _pairManager;
+    private readonly object _stateLock = new();
     private CharacterData? _lastCreatedData;
-    private CharacterData? _uploadingCharacterData = null;
+    private string? _uploadingDataHash;
     private readonly List<UserData> _previouslyVisiblePlayers = [];
     private Task<CharacterData>? _fileUploadTask = null;
     private readonly HashSet<UserData> _usersToPushDataTo = [];
     private readonly SemaphoreSlim _pushDataSemaphore = new(1, 1);
     private readonly CancellationTokenSource _runtimeCts = new();
+    private bool _disposed;
 
 
     public VisibleUserDataDistributor(ILogger<VisibleUserDataDistributor> logger, ApiController apiController, DalamudUtilService dalamudUtil,
@@ -34,9 +36,15 @@ public class VisibleUserDataDistributor : DisposableMediatorSubscriberBase
         Mediator.Subscribe<CharacterDataCreatedMessage>(this, (msg) =>
         {
             var newData = msg.CharacterData;
-            if (_lastCreatedData == null || (!string.Equals(newData.DataHash.Value, _lastCreatedData.DataHash.Value, StringComparison.Ordinal)))
+            bool changed;
+            lock (_stateLock)
             {
-                _lastCreatedData = newData;
+                if (_disposed) return;
+                changed = _lastCreatedData == null || !string.Equals(newData.DataHash.Value, _lastCreatedData.DataHash.Value, StringComparison.Ordinal);
+                if (changed) _lastCreatedData = newData;
+            }
+            if (changed)
+            {
                 Logger.LogTrace("Storing new data hash {hash}", newData.DataHash.Value);
                 PushToAllVisibleUsers(forced: true);
             }
@@ -47,13 +55,28 @@ public class VisibleUserDataDistributor : DisposableMediatorSubscriberBase
         });
 
         Mediator.Subscribe<ConnectedMessage>(this, (_) => PushToAllVisibleUsers());
-        Mediator.Subscribe<DisconnectedMessage>(this, (_) => _previouslyVisiblePlayers.Clear());
+        Mediator.Subscribe<DisconnectedMessage>(this, (_) =>
+        {
+            lock (_stateLock)
+            {
+                _previouslyVisiblePlayers.Clear();
+                _usersToPushDataTo.Clear();
+                _fileUploadTask = null;
+                _uploadingDataHash = null;
+            }
+        });
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
+            lock (_stateLock)
+            {
+                if (_disposed) return;
+                _disposed = true;
+                _fileUploadTask = null;
+            }
             _runtimeCts.Cancel();
             _runtimeCts.Dispose();
         }
@@ -63,14 +86,20 @@ public class VisibleUserDataDistributor : DisposableMediatorSubscriberBase
 
     private void PushToAllVisibleUsers(bool forced = false)
     {
-        foreach (var user in _pairManager.GetVisibleUsers())
+        var visibleUsers = _pairManager.GetVisibleUsers();
+        int recipientCount;
+        string? dataHash;
+        lock (_stateLock)
         {
-            _usersToPushDataTo.Add(user);
+            if (_disposed) return;
+            _usersToPushDataTo.UnionWith(visibleUsers);
+            recipientCount = _usersToPushDataTo.Count;
+            dataHash = _lastCreatedData?.DataHash.Value;
         }
 
-        if (_usersToPushDataTo.Count > 0)
+        if (recipientCount > 0)
         {
-            Logger.LogDebug("Pushing data {hash} for {count} visible players", _lastCreatedData?.DataHash.Value ?? "UNKNOWN", _usersToPushDataTo.Count);
+            Logger.LogDebug("Pushing data {hash} for {count} visible players", dataHash ?? "UNKNOWN", recipientCount);
             PushCharacterData(forced);
         }
     }
@@ -80,52 +109,86 @@ public class VisibleUserDataDistributor : DisposableMediatorSubscriberBase
         if (!_dalamudUtil.GetIsPlayerPresent() || !_apiController.IsConnected) return;
 
         var allVisibleUsers = _pairManager.GetVisibleUsers();
-        var newVisibleUsers = allVisibleUsers.Except(_previouslyVisiblePlayers).ToList();
-        _previouslyVisiblePlayers.Clear();
-        _previouslyVisiblePlayers.AddRange(allVisibleUsers);
-        if (newVisibleUsers.Count == 0) return;
+        List<UserData> newVisibleUsers;
+        string? dataHash;
+        lock (_stateLock)
+        {
+            if (_disposed) return;
+            newVisibleUsers = allVisibleUsers.Except(_previouslyVisiblePlayers).ToList();
+            _previouslyVisiblePlayers.Clear();
+            _previouslyVisiblePlayers.AddRange(allVisibleUsers);
+            if (newVisibleUsers.Count == 0) return;
+            _usersToPushDataTo.UnionWith(newVisibleUsers);
+            dataHash = _lastCreatedData?.DataHash.Value;
+        }
 
         Logger.LogDebug("Scheduling character data push of {data} to {users}",
-            _lastCreatedData?.DataHash.Value ?? string.Empty,
+            dataHash ?? string.Empty,
             string.Join(", ", newVisibleUsers.Select(k => k.AliasOrUID)));
-        foreach (var user in newVisibleUsers)
-        {
-            _usersToPushDataTo.Add(user);
-        }
         PushCharacterData();
     }
 
     private void PushCharacterData(bool forced = false)
     {
-        if (_lastCreatedData == null || _usersToPushDataTo.Count == 0) return;
-
         _ = Task.Run(async () =>
         {
-            forced |= _uploadingCharacterData?.DataHash != _lastCreatedData.DataHash;
-
-            if (_fileUploadTask == null || (_fileUploadTask?.IsCompleted ?? false) || forced)
+            try
             {
-                _uploadingCharacterData = _lastCreatedData.DeepClone();
-                Logger.LogDebug("Starting UploadTask for {hash}, Reason: TaskIsNull: {task}, TaskIsCompleted: {taskCpl}, Forced: {frc}",
-                    _lastCreatedData.DataHash, _fileUploadTask == null, _fileUploadTask?.IsCompleted ?? false, forced);
-                _fileUploadTask = _fileTransferManager.UploadFiles(_uploadingCharacterData, [.. _usersToPushDataTo]);
-            }
+                Task<CharacterData> uploadTask;
+                string uploadHash;
+                CancellationToken runtimeToken;
+                lock (_stateLock)
+                {
+                    if (_disposed || _lastCreatedData == null || _usersToPushDataTo.Count == 0) return;
+                    runtimeToken = _runtimeCts.Token;
+                    runtimeToken.ThrowIfCancellationRequested();
+                    uploadHash = _lastCreatedData.DataHash.Value;
+                    forced |= !string.Equals(_uploadingDataHash, uploadHash, StringComparison.Ordinal);
+                    if (_fileUploadTask == null || _fileUploadTask.IsCompleted || forced)
+                    {
+                        var uploadingData = _lastCreatedData.DeepClone();
+                        Logger.LogDebug("Starting UploadTask for {hash}, Reason: TaskIsNull: {task}, TaskIsCompleted: {taskCpl}, Forced: {frc}",
+                            uploadHash, _fileUploadTask == null, _fileUploadTask?.IsCompleted ?? false, forced);
+                        _uploadingDataHash = uploadHash;
+                        _fileUploadTask = _fileTransferManager.UploadFiles(uploadingData, [.. _usersToPushDataTo]);
+                    }
+                    uploadTask = _fileUploadTask;
+                }
 
-            if (_fileUploadTask != null)
-            {
-                var dataToSend = await _fileUploadTask.ConfigureAwait(false);
-                await _pushDataSemaphore.WaitAsync(_runtimeCts.Token).ConfigureAwait(false);
+                var dataToSend = await uploadTask.ConfigureAwait(false);
+                await _pushDataSemaphore.WaitAsync(runtimeToken).ConfigureAwait(false);
                 try
                 {
-                    if (_usersToPushDataTo.Count == 0) return;
-                    Logger.LogDebug("Pushing {data} to {users}", dataToSend.DataHash, string.Join(", ", _usersToPushDataTo.Select(k => k.AliasOrUID)));
-                    await _apiController.PushCharacterData(dataToSend, [.. _usersToPushDataTo]).ConfigureAwait(false);
-                    _usersToPushDataTo.Clear();
+                    List<UserData> recipients;
+                    lock (_stateLock)
+                    {
+                        runtimeToken.ThrowIfCancellationRequested();
+                        if (_disposed || !_apiController.IsConnected || !ReferenceEquals(_fileUploadTask, uploadTask)
+                            || !string.Equals(_lastCreatedData?.DataHash.Value, uploadHash, StringComparison.Ordinal)
+                            || _usersToPushDataTo.Count == 0) return;
+                        recipients = [.. _usersToPushDataTo];
+                    }
+                    Logger.LogDebug("Pushing {data} to {users}", dataToSend.DataHash, string.Join(", ", recipients.Select(k => k.AliasOrUID)));
+                    await _apiController.PushCharacterData(dataToSend, recipients).ConfigureAwait(false);
+                    lock (_stateLock)
+                    {
+                        if (!_disposed && _apiController.IsConnected && ReferenceEquals(_fileUploadTask, uploadTask)
+                            && string.Equals(_lastCreatedData?.DataHash.Value, uploadHash, StringComparison.Ordinal))
+                            _usersToPushDataTo.ExceptWith(recipients);
+                    }
                 }
                 finally
                 {
                     _pushDataSemaphore.Release();
                 }
+            }
+            catch (OperationCanceledException)
+            {
+                Logger.LogDebug("Character data upload or push was cancelled");
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Could not upload or push character data; recipients remain queued for the next update");
             }
         });
     }

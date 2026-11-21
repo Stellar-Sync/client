@@ -18,7 +18,12 @@ public abstract class FileTransfer
     public bool IsInTransfer => Transferred != Total && Transferred > 0;
     public bool IsTransferred => Transferred == Total;
     public abstract long Total { get; set; }
-    public long Transferred { get; set; } = 0;
+    private long _transferred;
+    public long Transferred
+    {
+        get => Interlocked.Read(ref _transferred);
+        set => Interlocked.Exchange(ref _transferred, value);
+    }
 
     public override string ToString()
     {

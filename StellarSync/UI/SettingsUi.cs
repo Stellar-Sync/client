@@ -214,6 +214,7 @@ public class SettingsUi : WindowMediatorSubscriberBase
         _uiShared.BigText("Transfer Settings");
 
         int maxParallelDownloads = _configService.Current.ParallelDownloads;
+        int maxParallelUploads = Math.Clamp(_configService.Current.ParallelUploads, 1, 10);
         bool useAlternativeUpload = _configService.Current.UseAlternativeFileUpload;
         int downloadSpeedLimit = _configService.Current.DownloadSpeedLimitInBytes;
 
@@ -251,6 +252,13 @@ public class SettingsUi : WindowMediatorSubscriberBase
             _configService.Current.ParallelDownloads = maxParallelDownloads;
             _configService.Save();
         }
+
+        if (ImGui.SliderInt("Maximum Parallel Uploads", ref maxParallelUploads, 1, 10))
+        {
+            _configService.Current.ParallelUploads = Math.Clamp(maxParallelUploads, 1, 10);
+            _configService.Save();
+        }
+        _uiShared.DrawHelpText("Maximum simultaneous file uploads. Compression runs one file at a time. Changes take effect when a new batch starts; running requests finish normally.");
 
         if (ImGui.Checkbox("Use Alternative Upload Method", ref useAlternativeUpload))
         {

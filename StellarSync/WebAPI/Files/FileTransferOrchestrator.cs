@@ -13,6 +13,7 @@ namespace StellarSync.WebAPI.Files;
 public class FileTransferOrchestrator : DisposableMediatorSubscriberBase
 {
     private readonly ConcurrentDictionary<Guid, bool> _downloadReady = new();
+    private readonly ConcurrentDictionary<string, FileTransfer> _forbiddenTransfers = new(StringComparer.OrdinalIgnoreCase);
     private readonly HttpClient _httpClient;
     private readonly StellarConfigService _stellarConfig;
     private readonly object _semaphoreModificationLock = new();
@@ -49,7 +50,8 @@ public class FileTransferOrchestrator : DisposableMediatorSubscriberBase
     }
 
     public Uri? FilesCdnUri { private set; get; }
-    public List<FileTransfer> ForbiddenTransfers { get; } = [];
+    public List<FileTransfer> ForbiddenTransfers => _forbiddenTransfers.Values.ToList();
+    public void AddForbiddenTransfer(FileTransfer transfer) => _forbiddenTransfers.TryAdd(transfer.Hash, transfer);
     public bool IsInitialized => FilesCdnUri != null;
 
     public void ClearDownloadRequest(Guid guid)
@@ -147,6 +149,7 @@ public class FileTransferOrchestrator : DisposableMediatorSubscriberBase
         CancellationToken? ct = null, HttpCompletionOption httpCompletionOption = HttpCompletionOption.ResponseContentRead)
     {
         var token = await _tokenProvider.GetToken().ConfigureAwait(false);
+        ct?.ThrowIfCancellationRequested();
         requestMessage.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
         if (requestMessage.Content != null && requestMessage.Content is not StreamContent && requestMessage.Content is not ByteArrayContent)
